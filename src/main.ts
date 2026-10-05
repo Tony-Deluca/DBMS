@@ -6,6 +6,8 @@ import { leggiImpostazione } from './storage/idb';
 import { creaVistaER, creaVistaLogico } from './ui/vistaModelli';
 import { creaVistaDati } from './ui/vistaDati';
 import { creaVistaEsercizi } from './ui/vistaEsercizi';
+import { creaVistaProgettazione } from './ui/progettazione/vistaProgettazione';
+import { progettazione } from './progettazione/stato';
 import { apriGestioneScenari } from './ui/gestioneScenari';
 import { apriGuida } from './ui/guida';
 import iconaUrl from './ui/icona.svg?url';
@@ -62,6 +64,7 @@ const VISTE: { id: NomeVista; nome: string }[] = [
   { id: 'logico', nome: 'Modello logico' },
   { id: 'dati', nome: 'Dati' },
   { id: 'esercizi', nome: 'Esercizi' },
+  { id: 'progettazione', nome: 'Progettazione' },
 ];
 const schede = h('nav', { class: 'schede', role: 'tablist', 'aria-label': 'Viste' });
 for (const v of VISTE) {
@@ -82,11 +85,13 @@ const vistaER = creaVistaER();
 const vistaLogico = creaVistaLogico();
 const vistaDati = creaVistaDati();
 const vistaEsercizi = creaVistaEsercizi();
+const vistaProgettazione = creaVistaProgettazione();
 const sezioni: Record<NomeVista, HTMLElement> = {
   er: h('section', { class: 'vista', 'aria-label': 'Modello ER' }, vistaER.elemento),
   logico: h('section', { class: 'vista', 'aria-label': 'Modello logico' }, vistaLogico.elemento),
   dati: h('section', { class: 'vista', 'aria-label': 'Dati' }, vistaDati.elemento),
   esercizi: h('section', { class: 'vista', 'aria-label': 'Esercizi' }, vistaEsercizi.elemento),
+  progettazione: h('section', { class: 'vista', 'aria-label': 'Progettazione' }, vistaProgettazione.elemento),
 };
 const intestazioneScenario = h('div', { class: 'intestazione-scenario' });
 const principale = h('main', { class: 'principale' }, intestazioneScenario, Object.values(sezioni));
@@ -96,11 +101,12 @@ sostituisci(app, testata, principale);
 const disegnaVista = () => {
   for (const b of schede.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-selected', String(b.dataset.id === stato.vista));
   for (const [id, el] of Object.entries(sezioni)) el.hidden = id !== stato.vista;
-  intestazioneScenario.hidden = stato.vista === 'esercizi' || stato.vista === 'dati';
+  intestazioneScenario.hidden = stato.vista === 'esercizi' || stato.vista === 'dati' || stato.vista === 'progettazione';
   if (stato.vista === 'er') vistaER.aggiorna();
   if (stato.vista === 'logico') vistaLogico.aggiorna();
   if (stato.vista === 'dati') vistaDati.aggiorna();
   if (stato.vista === 'esercizi') vistaEsercizi.aggiorna();
+  if (stato.vista === 'progettazione') vistaProgettazione.aggiorna();
 };
 
 const disegnaSelettore = () => {
@@ -163,7 +169,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !import.meta.env.VIT
 // test E2E / debug
 declare global {
   interface Window {
-    __palestra?: { stato: typeof stato };
+    __palestra?: { stato: typeof stato; progettazione: typeof progettazione };
   }
 }
-window.__palestra = { stato };
+window.__palestra = { stato, progettazione };

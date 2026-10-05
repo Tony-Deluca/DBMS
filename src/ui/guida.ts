@@ -13,6 +13,21 @@ export function apriGuida(): void {
     </ol>
   </section>
   <section class="sezione">
+    <h3>Progettazione (schemi da disegnare)</h3>
+    <p>Per gli esercizi di progettazione: incolli la <strong>Traccia</strong>, disegni lo <strong>schema ER</strong>, crei la <strong>copia per la ristrutturazione</strong>
+    (l'originale resta com'è), scrivi le <strong>Note</strong> sulle scelte e poi lo <strong>schema logico</strong>. L'app non traduce nulla da sola: la correzione la chiedi all'IA con <strong>Copia per l'IA</strong>.</p>
+    <ul>
+      <li><strong>Entità</strong>, <strong>Relazione</strong> e <strong>Attributo</strong> aggiungono elementi; si modificano nel riquadro <strong>Proprietà</strong> (nome, identificatore ●, cardinalità con un tocco, attributi composti e multivalore, identificatore esterno, ruoli).</li>
+      <li><strong>Collega</strong>: tocca un'entità e poi una relazione (o due entità: la relazione si crea in mezzo; la stessa entità due volte = relazione ricorsiva). <strong>Generalizza</strong>: prima la figlia, poi il padre.</li>
+      <li>Un dito su un elemento lo sposta; un dito sullo sfondo o due dita spostano la vista; pinch per lo zoom. Pressione prolungata (o clic destro) per il menu dell'elemento. <strong>⋯</strong>: duplica, selezione multipla, esporta.</li>
+      <li>Schema logico: <strong>Diagramma</strong>, <strong>Notazione</strong> d'esame (chiave sottolineata, <code>*</code> = facoltativo, vincoli sotto) oppure <strong>Scrivi</strong>, dove scrivi ad esempio <code>Studente(_Matricola_, Nome, Città*)</code> e <code>Esame.Studente → Studente.Matricola</code>: se c'è un errore di sintassi il testo resta e il diagramma non cambia.</li>
+      <li><strong>Controlli</strong> segnala incoerenze (identificatori mancanti, cardinalità non indicate, chiavi esterne verso colonne inesistenti…) senza correggere nulla.</li>
+      <li><strong>Presentazione</strong> mostra tutto pulito su sfondo bianco per lo screenshot; <strong>Esporta</strong> (nel menu ⋯) crea PNG ad alta risoluzione o SVG.</li>
+      <li>Su schermo largo scegli cosa vedere nei due pannelli affiancati; su iPad in verticale usi le schede. <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> annulla, con <kbd>⇧</kbd> ripete.</li>
+      <li>Da <strong>Scenari → Apri in Progettazione</strong> copi ER e logico di uno scenario in un nuovo progetto (lo scenario non cambia).</li>
+    </ul>
+  </section>
+  <section class="sezione">
     <h3>Come viene verificata la risposta</h3>
     <p>Si confrontano i <em>risultati</em>, non il testo SQL: la tua query è corretta se il risultato coincide con quello di almeno una delle soluzioni ufficiali.</p>
     <ul>
@@ -48,15 +63,15 @@ export function apriGuida(): void {
   <section class="sezione">
     <h3>Dati e offline</h3>
     <p>Tutto resta nel tuo browser (IndexedDB): nessun account, nessun server. Dopo il primo caricamento l'app funziona anche offline.
-    Su iPad aggiungila alla schermata Home (Condividi → Aggiungi alla schermata Home) ed esporta ogni tanto gli scenari come backup.</p>
+    Su iPad aggiungila alla schermata Home (Condividi → Aggiungi alla schermata Home) ed esporta ogni tanto gli scenari e i progetti come backup.</p>
   </section>`;
   const html = import.meta.env.VITE_ARTIFACT
     ? htmlBase.replace(/<section class="sezione">\s*<h3>Dati e offline<\/h3>[\s\S]*?<\/section>/, `
   <section class="sezione">
     <h3>Dove restano i dati</h3>
-    <p>Gli scenari importati e i progressi restano nel browser di questo dispositivo: non arrivano a nessun altro.
+    <p>Gli scenari importati, i progressi e i progetti restano nel browser di questo dispositivo: non arrivano a nessun altro.
     Su iPad Safari può cancellarli se non apri la pagina per alcune settimane: usa ogni tanto <strong>Scenari → Copia JSON</strong>
-    e salva il testo (per esempio in Note) come backup.</p>
+    e <strong>Progetto ▾ → Copia JSON negli appunti</strong> e salva il testo (per esempio in Note) come backup.</p>
   </section>`)
     : htmlBase;
   apriDialogo('Guida', h('div', { class: 'guida', html }), { classe: 'dialogo-grande' });

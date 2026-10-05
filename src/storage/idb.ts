@@ -1,8 +1,10 @@
 // Wrapper minimo su IndexedDB: scenari, progressi e impostazioni.
 import type { ScenarioSalvato } from '../scenario/types';
+import type { Progetto } from '../progettazione/modello';
 
 const NOME_DB = 'palestra-sql';
-const VERSIONE = 1;
+// v2: aggiunto l'archivio «progetti» (sezione Progettazione); gli altri archivi restano invariati
+const VERSIONE = 2;
 
 export interface Progresso {
   /** chiave: `${scenarioId}::${esercizioId}` */
@@ -23,6 +25,7 @@ const memoria = {
   scenari: new Map<string, ScenarioSalvato>(),
   progressi: new Map<string, Progresso>(),
   impostazioni: new Map<string, unknown>(),
+  progetti: new Map<string, Progetto>(),
 };
 let soloMemoria = false;
 
@@ -54,10 +57,16 @@ function apri(): Promise<IDBDatabase> {
         s.createIndex('scenario', 'scenarioId');
       }
       if (!db.objectStoreNames.contains('impostazioni')) db.createObjectStore('impostazioni');
+      if (!db.objectStoreNames.contains('progetti')) db.createObjectStore('progetti', { keyPath: 'id' });
     };
-    req.onsuccess = () => risolvi(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // un'altra scheda con una versione più nuova dell'app chiede l'aggiornamento: si chiude la connessione
+      db.onversionchange = () => db.close();
+      risolvi(db);
+    };
     req.onerror = () => rifiuta(req.error ?? new Error('IndexedDB non disponibile'));
-    req.onblocked = () => rifiuta(new Error('IndexedDB bloccato da un\'altra scheda aperta'));
+    // onblocked: un'altra scheda usa ancora la versione precedente; l'apertura prosegue appena si chiude
   });
   return dbPromise;
 }
@@ -151,4 +160,25 @@ export async function richiediPersistenza(): Promise<'concessa' | 'negata' | 'no
 export function nuovoId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// ---------- progetti (sezione Progettazione) ----------
+
+export async function elencoProgetti(): Promise<Progetto[]> {
+  const ordina = (l: Progetto[]) => l.sort((a, b) => b.modificato - a.modificato);
+  if (!(await disponibile())) return ordina([...memoria.progetti.values()].map((p) => structuredClone(p)));
+  const s = await store('progetti');
+  return ordina(await promessa(s.getAll() as IDBRequest<Progetto[]>));
+}
+
+export async function salvaProgetto(p: Progetto): Promise<void> {
+  if (!(await disponibile())) return void memoria.progetti.set(p.id, structuredClone(p));
+  const s = await store('progetti', 'readwrite');
+  await promessa(s.put(p));
+}
+
+export async function eliminaProgetto(id: string): Promise<void> {
+  if (!(await disponibile())) return void memoria.progetti.delete(id);
+  const s = await store('progetti', 'readwrite');
+  await promessa(s.delete(id));
 }

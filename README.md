@@ -9,6 +9,9 @@ Basi di Dati. Ogni *scenario* contiene:
   e in notazione testuale `TABELLA(Pk, Col, Fk*)`);
 - un set di **esercizi** con editor SQL, esecuzione e **verifica automatica** del risultato.
 
+In più c'è la sezione **Progettazione**, per disegnare a mano gli schemi degli esercizi di
+progettazione (ER, ER ristrutturato, logico) e farli correggere a un'IA.
+
 Gira tutto nel browser (SQLite compilato in WebAssembly con sql.js): nessun
 server, nessun account. Funziona offline, su PC e su iPad (Safari), e si può
 installare come app sulla schermata Home.
@@ -39,6 +42,45 @@ Il formato è documentato in [`SCHEMA.md`](SCHEMA.md). Il piano di progetto è i
    **Scenari → Importa testo incollato**.
 
 Bozze e progressi (✓ risolto, tentato, soluzione vista) vengono salvati automaticamente.
+
+### Progettazione: guida breve
+
+La scheda **Progettazione** serve per gli esercizi «dalla traccia allo schema». L'app è solo un
+foglio da disegno: **non traduce** l'ER in logico e non corregge, segnala soltanto.
+
+1. **Progetti**: menu in alto per aprirli; **+ Nuovo**; **Progetto ▾** per rinominare, duplicare,
+   esportare/importare il JSON del progetto o eliminarlo. Tutto si salva da solo nel browser.
+2. **Traccia**: incolla il testo dell'esercizio.
+3. **Schema ER**: **Entità**, **Relazione**, **Attributo** aggiungono elementi; il riquadro
+   **Proprietà** permette di cambiare nome, identificatore (pallino pieno), cardinalità con un tocco
+   (`(0,1)` `(1,1)` `(0,N)` `(1,N)`), attributi facoltativi/multivalore, composti, identificatori
+   esterni, ruoli. **Collega**: tocca un'entità e poi una relazione (due entità → relazione in mezzo;
+   la stessa entità due volte → relazione ricorsiva con ruoli). **Generalizza**: figlia, poi padre;
+   la copertura `(t,e)` `(t,s)` `(p,e)` `(p,s)` si sceglie nelle proprietà.
+   Un dito su un elemento lo sposta, un dito sullo sfondo o due dita spostano la vista, pinch = zoom,
+   pressione prolungata (clic destro su PC) = menu. **⋯**: duplica, selezione multipla, esporta.
+   `Ctrl/⌘+Z` annulla, `Ctrl/⌘+⇧+Z` ripete (anche con ↶ ↷).
+4. **ER ristrutturato**: «Crea copia per la ristrutturazione» fa una copia indipendente da modificare;
+   nelle **Note** scrivi le scelte (generalizzazioni, attributi multivalore, identificatori…).
+5. **Schema logico**: **Diagramma** (tabelle, PK sottolineate, frecce delle FK), **Notazione**
+   d'esame, **Scrivi** in testo:
+   ```
+   Studente(_Matricola_, Nome, Cognome, Città*)
+   Esame(_Studente_, _Corso_, Voto)
+
+   Esame.Studente → Studente.Matricola
+   ```
+   `_X_` = chiave primaria, `X*` = facoltativo, `->` vale come `→`. Con un errore di sintassi il
+   testo resta e il diagramma non cambia finché non lo correggi.
+6. **Controlli**: segnalazioni di coerenza su richiesta, senza correzioni automatiche.
+7. **Copia per l'IA**: copia una descrizione testuale completa e non ambigua del progetto
+   (traccia, ER, ristrutturazione, note, logico) da incollare in chat per la correzione.
+8. **Presentazione**: pagina pulita su sfondo bianco con tutto il progetto, per lo screenshot;
+   ogni schema si esporta anche in **PNG** ad alta risoluzione o **SVG** (menu ⋯).
+9. Su schermo largo i **due pannelli** sono affiancati (scegli cosa mostrare in ognuno, il divisore
+   si trascina); su iPad in verticale si passa da una parte all'altra con le schede.
+10. **Scenari → Apri in Progettazione** crea un progetto con ER e logico di uno scenario (lo scenario
+   e il suo formato non cambiano).
 
 ### Come viene verificata la risposta
 
@@ -191,6 +233,9 @@ src/
   sql/        worker sql.js, guardia SELECT/WITH, confronto risultati, errori in italiano
   scenario/   tipi, validatore, lettura del JSON incollato, importazione
   storage/    IndexedDB e archiviazione persistente
+  progettazione/  modello dei progetti, operazioni, annulla/ripeti, notazione del logico,
+              controlli, testo per l'IA, disegno SVG ed esportazione PNG/SVG
+  ui/progettazione/  editor ER e logico, area di disegno (gesti touch), vista a due pannelli
 tests/unit/   confronto, guardia, validatore, scenario d'esempio, layout, documenti
 tests/e2e/    layout laptop/iPad, esecuzione e verifica, import per incolla, offline
 ```
@@ -219,3 +264,7 @@ tests/e2e/    layout laptop/iPad, esecuzione e verifica, import per incolla, off
   installazione sulla schermata Home, eliminazione dei dati dopo inattività) vanno
   provati su un iPad reale.
 - La verifica confronta i risultati sui dati dello scenario: vedi l'avvertenza sopra.
+- Progettazione: i gesti (pressione prolungata, pinch, trascinamento con un dito), la copia
+  dell'immagine negli appunti e il salvataggio dei PNG sono provati in Chromium con touch
+  emulato, non su Safari per iPad. Gli attributi si dispongono da soli attorno alla figura
+  (lato scelto a mano se serve): con molti elementi vicini le scritte possono sovrapporsi.

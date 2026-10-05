@@ -1,10 +1,12 @@
 // Finestra "Scenari": importazione (file, incolla, trascina) e gestione degli scenari salvati.
 import { h, sostituisci, apriDialogo, conferma, toast } from './dom';
 import { stato, on } from '../app/stato';
-import { apriScenario, assicuraEsempio, azzeraProgressi, caricaScenari, eliminaScenario, richiediPersistenza, rinominaScenario } from '../app/azioni';
+import { apriScenario, assicuraEsempio, azzeraProgressi, caricaScenari, cambiaVista, eliminaScenario, richiediPersistenza, rinominaScenario } from '../app/azioni';
+import { progettazione } from '../progettazione/stato';
+import { progettoDaScenario } from '../progettazione/daScenario';
 import { importaTesto, jsonEsportazione, nomeFile } from '../scenario/importa';
 import type { Problema } from '../scenario/validate';
-import { archivioSoloInMemoria } from '../storage/idb';
+import { archivioSoloInMemoria, nuovoId } from '../storage/idb';
 import promptGeneratore from '../../PROMPT_GENERATORE.md?raw';
 import { estraiPrompt } from '../scenario/prompt';
 
@@ -204,6 +206,17 @@ export function apriGestioneScenari(): void {
         btn('Copia JSON', async () => {
           const ok = await copiaTesto(jsonEsportazione(sc));
           toast(ok ? 'JSON copiato negli appunti' : 'Copia non riuscita', ok ? 'ok' : 'errore');
+        }),
+        btn('Apri in Progettazione', async () => {
+          try {
+            await progettazione.carica();
+            await progettazione.aggiungi(progettoDaScenario(sc.dati, sc.nome, nuovoId()));
+            chiudi();
+            cambiaVista('progettazione');
+            toast('Creato un progetto con ER e logico dello scenario (lo scenario non cambia)', 'ok', 4000);
+          } catch (e) {
+            toast(`Impossibile creare il progetto: ${(e as Error).message}`, 'errore');
+          }
         }),
         btn('Azzera progressi', async () => {
           if (await conferma('Azzerare i progressi?', `Bozze e stato degli esercizi di «${sc.nome}» verranno cancellati.`, 'Azzera', true)) {
