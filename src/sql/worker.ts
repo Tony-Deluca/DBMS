@@ -3,7 +3,7 @@
 // e una query troppo lunga si interrompe terminando il worker.
 import initSqlJs from 'sql.js/dist/sql-wasm-browser.js';
 import type { Database, SqlJsStatic } from 'sql.js';
-import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url';
+import { opzioniSqlJs } from './wasm';
 import { creaDatabase, eseguiPerVista, provaScenario, schemaReale, verifica } from './engine';
 import type { Richiesta } from './protocollo';
 
@@ -11,7 +11,7 @@ let SQL: Promise<SqlJsStatic> | null = null;
 let db: Database | null = null;
 
 function sqljs(): Promise<SqlJsStatic> {
-  SQL ??= initSqlJs({ locateFile: () => wasmUrl });
+  SQL ??= initSqlJs(opzioniSqlJs());
   return SQL;
 }
 

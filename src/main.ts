@@ -7,6 +7,7 @@ import { creaVistaER, creaVistaLogico } from './ui/vistaModelli';
 import { creaVistaEsercizi } from './ui/vistaEsercizi';
 import { apriGestioneScenari } from './ui/gestioneScenari';
 import { apriGuida } from './ui/guida';
+import iconaUrl from './ui/icona.svg?url';
 
 // --- tema ---
 type Tema = 'auto' | 'chiaro' | 'scuro';
@@ -70,7 +71,7 @@ for (const v of VISTE) {
 const testata = h(
   'header',
   { class: 'testata' },
-  h('div', { class: 'marchio' }, h('img', { src: 'favicon.svg', alt: '', width: '28', height: '28' }), h('span', { class: 'marchio-nome' }, 'Palestra SQL')),
+  h('div', { class: 'marchio' }, h('img', { src: iconaUrl, alt: '', width: '28', height: '28' }), h('span', { class: 'marchio-nome' }, 'Palestra SQL')),
   schede,
   h('div', { class: 'testata-destra' }, selettore, btnScenari, btnGuida, btnTema),
 );
@@ -141,7 +142,7 @@ async function avvia() {
 void avvia();
 
 // --- service worker (offline) ---
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+if ('serviceWorker' in navigator && import.meta.env.PROD && !import.meta.env.VITE_ARTIFACT) {
   import('virtual:pwa-register')
     .then(({ registerSW }) =>
       registerSW({

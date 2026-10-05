@@ -68,6 +68,14 @@ risultato vuoto o alternative non equivalenti.
 
 ---
 
+## Versione in un unico file HTML
+
+`npm run build:artifact` crea `dist-artifact/palestra-sql.html` (circa 1,4 MB): JS, CSS, worker e
+WebAssembly di SQLite sono incorporati, senza service worker. È pensata per essere pubblicata come
+pagina privata su claude.ai e aperta da Safari con un link, senza GitHub Pages. Rispetto alla PWA:
+non funziona offline, non ha «Esporta» (i download sono bloccati: si usa «Copia JSON») né
+«Incolla dagli appunti» (si incolla direttamente nel riquadro).
+
 ## Pubblicazione gratuita (passo passo)
 
 Su iPad non si possono eseguire `npm` né un server locale: il sito va pubblicato
@@ -145,6 +153,7 @@ npm install
 npm run dev          # server di sviluppo (http://localhost:5173)
 npm test             # test unitari (Vitest)
 npm run build        # sito statico in dist/ (con service worker e manifest)
+npm run build:artifact  # versione in un unico file HTML (dist-artifact/palestra-sql.html)
 npm run test:e2e     # test E2E (Playwright): build servita sotto /Cluade/
 npm run icone        # rigenera le icone PNG da public/favicon.svg
 python3 scripts/crea-esempio.py   # rigenera scenari-esempio/universita.json

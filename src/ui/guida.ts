@@ -1,7 +1,7 @@
 import { h, apriDialogo } from './dom';
 
 export function apriGuida(): void {
-  const html = `
+  const htmlBase = `
   <section class="sezione">
     <h3>Come si usa</h3>
     <ol>
@@ -48,5 +48,14 @@ export function apriGuida(): void {
     <p>Tutto resta nel tuo browser (IndexedDB): nessun account, nessun server. Dopo il primo caricamento l'app funziona anche offline.
     Su iPad aggiungila alla schermata Home (Condividi → Aggiungi alla schermata Home) ed esporta ogni tanto gli scenari come backup.</p>
   </section>`;
+  const html = import.meta.env.VITE_ARTIFACT
+    ? htmlBase.replace(/<section class="sezione">\s*<h3>Dati e offline<\/h3>[\s\S]*?<\/section>/, `
+  <section class="sezione">
+    <h3>Dove restano i dati</h3>
+    <p>Gli scenari importati e i progressi restano nel browser di questo dispositivo: non arrivano a nessun altro.
+    Su iPad Safari può cancellarli se non apri la pagina per alcune settimane: usa ogni tanto <strong>Scenari → Copia JSON</strong>
+    e salva il testo (per esempio in Note) come backup.</p>
+  </section>`)
+    : htmlBase;
   apriDialogo('Guida', h('div', { class: 'guida', html }), { classe: 'dialogo-grande' });
 }

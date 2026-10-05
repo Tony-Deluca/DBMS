@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "icone": "node scripts/genera-icone.mjs"
+    "icone": "node scripts/genera-icone.mjs",
+    "build:artifact": "tsc --noEmit && vite build --config vite.artifact.config.ts && node scripts/crea-artifact.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

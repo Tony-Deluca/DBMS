@@ -1,6 +1,7 @@
 // Client del worker SQL: chiamate asincrone con timeout. Se una query non
 // termina, il worker viene terminato, ricreato e il database ricaricato.
 import type { Richiesta } from './protocollo';
+import { creaWorker } from './creaWorker';
 import type { RisultatoEsecuzione, RispostaVerifica, ProblemaSQL } from './engine';
 
 export const TIMEOUT_MS = 8000;
@@ -29,7 +30,7 @@ export class ClientSQL {
 
   private avvia(): Worker {
     if (this.worker) return this.worker;
-    const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+    const w = creaWorker();
     w.onmessage = (ev: MessageEvent<{ id: number; ok: boolean; risultato?: unknown; errore?: string }>) => {
       const a = this.attese.get(ev.data.id);
       if (!a) return;

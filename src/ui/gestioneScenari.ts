@@ -4,6 +4,7 @@ import { stato, on } from '../app/stato';
 import { apriScenario, assicuraEsempio, azzeraProgressi, caricaScenari, eliminaScenario, richiediPersistenza, rinominaScenario } from '../app/azioni';
 import { importaTesto, jsonEsportazione, nomeFile } from '../scenario/importa';
 import type { Problema } from '../scenario/validate';
+import { archivioSoloInMemoria } from '../storage/idb';
 import promptGeneratore from '../../PROMPT_GENERATORE.md?raw';
 import { estraiPrompt } from '../scenario/prompt';
 
@@ -113,7 +114,8 @@ export function apriGestioneScenari(): void {
   const btnImportaTesto = h('button', { type: 'button', class: 'btn btn-primario' }, 'Importa testo incollato');
   btnImportaTesto.addEventListener('click', () => void importa(area.value, 'testo incollato'));
   const btnAppunti = h('button', { type: 'button', class: 'btn' }, '📋 Incolla dagli appunti');
-  btnAppunti.hidden = !navigator.clipboard?.readText;
+  // nella pagina pubblicata su claude.ai leggere gli appunti non è permesso: si incolla nel riquadro
+  btnAppunti.hidden = !navigator.clipboard?.readText || !!import.meta.env.VITE_ARTIFACT;
   btnAppunti.addEventListener('click', async () => {
     try {
       area.value = await navigator.clipboard.readText();
@@ -197,7 +199,8 @@ export function apriGestioneScenari(): void {
           campo.focus();
           campo.select();
         }),
-        btn('Esporta', () => scarica(nomeFile(sc.nome), jsonEsportazione(sc))),
+        // nella pagina pubblicata i download sono bloccati: resta «Copia JSON»
+        import.meta.env.VITE_ARTIFACT ? null : btn('Esporta', () => scarica(nomeFile(sc.nome), jsonEsportazione(sc))),
         btn('Copia JSON', async () => {
           const ok = await copiaTesto(jsonEsportazione(sc));
           toast(ok ? 'JSON copiato negli appunti' : 'Copia non riuscita', ok ? 'ok' : 'errore');
@@ -219,6 +222,10 @@ export function apriGestioneScenari(): void {
       elenco.appendChild(h('li', { class: `scenario${corrente ? ' corrente' : ''}` }, nome, dettagli, comandi));
     }
     const p = stato.persistenza;
+    if (archivioSoloInMemoria()) {
+      infoArchivio.textContent = '⚠️ L\'archivio del browser non è disponibile: gli scenari importati restano solo finché la pagina è aperta. Usa «Copia JSON» per conservarli.';
+      return;
+    }
     infoArchivio.textContent =
       p === 'concessa'
         ? '🔒 Archiviazione persistente concessa: il browser non cancellerà gli scenari automaticamente.'
