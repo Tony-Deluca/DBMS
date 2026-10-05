@@ -1,0 +1,39 @@
+{
+  "name": "palestra-sql",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Palestra SQL per l'esame di Basi di Dati: modello ER, logico ed esercizi con verifica automatica (sql.js, offline, PWA).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "icone": "node scripts/genera-icone.mjs"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@dagrejs/dagre": "^3.1.1",
+    "@lezer/highlight": "^1.2.5",
+    "codemirror": "^6.0.2",
+    "sql.js": "^1.14.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^26.6.4",
+    "@types/sql.js": "^1.4.11",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.3",
+    "workbox-window": "^7.4.1"
+  }
+}
