@@ -1,6 +1,8 @@
 // Client del worker SQL: chiamate asincrone con timeout. Se una query non
 // termina, il worker viene terminato, ricreato e il database ricaricato.
 import type { Richiesta } from './protocollo';
+import type { ModelloLogico } from '../scenario/types';
+import type { Pagina, RichiestaPagina, TabellaInfo } from './dati';
 import { creaWorker } from './creaWorker';
 import type { RisultatoEsecuzione, RispostaVerifica, ProblemaSQL } from './engine';
 
@@ -25,7 +27,7 @@ export class ClientSQL {
   private worker: Worker | null = null;
   private prossimoId = 1;
   private attese = new Map<number, InAttesa>();
-  private statementsCorrenti: string[] | null = null;
+  private correnti: { statements: string[]; logico: ModelloLogico | null } | null = null;
   private caricamento: Promise<{ schema: Record<string, string[]> }> | null = null;
 
   private avvia(): Worker {
@@ -79,16 +81,16 @@ export class ClientSQL {
       a.rifiuta(new Error('Motore SQL riavviato.'));
     }
     this.attese.clear();
-    if (this.statementsCorrenti) {
-      const st = this.statementsCorrenti;
-      this.caricamento = this.chiama<{ schema: Record<string, string[]> }>({ tipo: 'carica', statements: st }, null);
+    if (this.correnti) {
+      const { statements, logico } = this.correnti;
+      this.caricamento = this.chiama<{ schema: Record<string, string[]> }>({ tipo: 'carica', statements, logico }, null);
       this.caricamento.catch(() => undefined);
     }
   }
 
-  carica(statements: string[]): Promise<{ schema: Record<string, string[]> }> {
-    this.statementsCorrenti = statements;
-    this.caricamento = this.chiama({ tipo: 'carica', statements }, null);
+  carica(statements: string[], logico: ModelloLogico | null = null): Promise<{ schema: Record<string, string[]> }> {
+    this.correnti = { statements, logico };
+    this.caricamento = this.chiama({ tipo: 'carica', statements, logico }, null);
     return this.caricamento;
   }
 
@@ -102,14 +104,24 @@ export class ClientSQL {
     return this.chiama({ tipo: 'esegui', sql, maxRighe: MAX_RIGHE_VISTA }, TIMEOUT_MS);
   }
 
+  async tabelle(): Promise<TabellaInfo[]> {
+    await this.pronto();
+    return this.chiama({ tipo: 'tabelle' }, TIMEOUT_MS);
+  }
+
+  async pagina(richiesta: RichiestaPagina): Promise<Pagina> {
+    await this.pronto();
+    return this.chiama({ tipo: 'pagina', richiesta }, TIMEOUT_MS);
+  }
+
   async verifica(sql: string, soluzioni: string[]): Promise<RispostaVerifica> {
     await this.pronto();
     return this.chiama({ tipo: 'verifica', sql, soluzioni, maxRighe: MAX_RIGHE_VISTA }, TIMEOUT_MS * 2);
   }
 
   /** Prova lo scenario su un DB temporaneo (non tocca quello corrente). */
-  prova(statements: string[], esercizi: { id: string; soluzioni: string[] }[], tabelleLogico: string[]): Promise<ProblemaSQL[]> {
-    return this.chiama({ tipo: 'prova', statements, esercizi, tabelleLogico }, 30000);
+  prova(statements: string[], esercizi: { id: string; soluzioni: string[] }[], tabelleLogico: string[], logico: ModelloLogico | null = null): Promise<ProblemaSQL[]> {
+    return this.chiama({ tipo: 'prova', statements, esercizi, tabelleLogico, logico }, 30000);
   }
 }
 

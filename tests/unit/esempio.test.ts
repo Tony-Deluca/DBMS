@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { creaDatabase, esegui, provaScenario, violazioniFK } from '../../src/sql/engine';
+import { creaDatabase, esegui, provaScenario, riferimentoPer, violazioniFK } from '../../src/sql/engine';
 import { validaScenario } from '../../src/scenario/validate';
 import { verificaControSoluzioni } from '../../src/sql/compare';
 import { leggiScenario, sqlJs } from './helpers';
@@ -57,7 +57,7 @@ describe('scenario di esempio «Università»', () => {
     const { db } = creaDatabase(SQL, scenario.database.statements);
     const prova = (id: string, sql: string) => {
       const es = scenario.esercizi.find((e) => e.id === id)!;
-      const sol = es.soluzioni.map((s) => ({ sql: s, risultato: esegui(db, s) }));
+      const sol = es.soluzioni.map((s) => riferimentoPer(db, s));
       return verificaControSoluzioni(sol, esegui(db, sql));
     };
     const e7 = prova('E7', 'SELECT Matricola, Cognome, Nome FROM Docente WHERE Matricola NOT IN (SELECT Docente FROM Corso)');

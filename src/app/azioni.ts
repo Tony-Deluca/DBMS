@@ -37,7 +37,7 @@ export async function apriScenario(id: string | null): Promise<void> {
   emetti('scenario', 'esercizio', 'progressi');
   if (sc) {
     try {
-      const { schema } = await sql.carica(sc.dati.database.statements);
+      const { schema } = await sql.carica(sc.dati.database.statements, sc.dati.logico);
       if (stato.corrente?.id !== sc.id) return;
       stato.schemaDb = schema;
     } catch (e) {

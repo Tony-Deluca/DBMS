@@ -42,7 +42,8 @@ REGOLE PER GLI ESERCIZI
 VERIFICA PRIMA DI RISPONDERE
 - Se puoi eseguire codice, crea davvero il database in SQLite ed esegui ogni soluzione. Altrimenti traccia a mano l'esecuzione sui dati.
 - Ogni soluzione deve restituire un risultato NON vuoto e coerente con la traccia.
-- Le soluzioni alternative dello stesso esercizio devono dare esattamente lo stesso risultato (stesso multiinsieme di righe).
+- Le soluzioni alternative dello stesso esercizio devono dare esattamente lo stesso risultato (stesso multiinsieme di righe) e devono restare equivalenti anche se nel database mancano righe, ci sono righe duplicate o valori NULL nelle colonne facoltative, oppure una tabella è vuota (l'app controlla le risposte anche su varianti dei dati con questi casi). Esempio da evitare: una divisione scritta con GROUP BY ... HAVING COUNT(*) = (SELECT COUNT(*) ...) non equivale al doppio NOT EXISTS quando il divisore è vuoto.
+- Evita LIMIT nelle soluzioni (dipende dai pareggi); se serve, ordina in modo totale.
 - Per almeno 3 esercizi, controlla che una tipica soluzione sbagliata (JOIN invece di LEFT JOIN, NOT IN con NULL, DISTINCT dimenticato, condizione in WHERE invece che in HAVING) dia un risultato DIVERSO grazie ai casi limite. Se non è così, modifica i dati.
 - Ogni INSERT deve rispettare le chiavi primarie, i CHECK e le chiavi esterne dichiarate.
 
@@ -122,7 +123,7 @@ Vincoli del formato:
 - Entità: "nome" unico (anche rispetto alle relazioni), "attributi" è un array di OGGETTI (può essere vuoto per le entità figlie). Ogni entità non figlia ha almeno un attributo con "chiave": true (più attributi con chiave = identificatore composto). Per le entità deboli puoi aggiungere "identificatoreEsterno": ["NOME_RELAZIONE"].
 - Cardinalità sempre come stringa "(min,max)": "(0,1)", "(1,1)", "(0,N)", "(1,N)". Copertura delle generalizzazioni: "(t,e)", "(t,s)", "(p,e)" o "(p,s)".
 - Relazioni: almeno 2 partecipanti; nelle relazioni ricorsive indica "ruolo" per ciascuno.
-- Logico: ogni tabella ha "nome", "colonne" (oggetti con "nome", "tipo" e facoltativamente "nullable": true), "chiavePrimaria" (array), "chiaviEsterne" (array di oggetti con "colonne", "tabella", "riferimenti" della stessa lunghezza). I nomi delle tabelle devono coincidere con quelli dei CREATE TABLE.
+- Logico: ogni tabella ha "nome", "colonne" (oggetti con "nome", "tipo" e "nullable": true SOLO per le colonne facoltative, coerente con l'assenza di NOT NULL nei CREATE TABLE), "chiavePrimaria" (array), "chiaviEsterne" (array di oggetti con "colonne", "tabella", "riferimenti" della stessa lunghezza). I nomi delle tabelle devono coincidere con quelli dei CREATE TABLE.
 - "database.statements" è un ARRAY di stringhe, una istruzione per elemento: prima tutti i CREATE TABLE, poi gli INSERT (un INSERT può inserire più righe).
 - "esercizi": "id" unico (stringa), "difficolta" intero da 1 a 5, "soluzioni" è SEMPRE un array di 1–3 stringhe.
 - Nelle stringhe JSON usa \n per andare a capo e raddoppia l'apice nelle stringhe SQL (es. 'L''Aquila').

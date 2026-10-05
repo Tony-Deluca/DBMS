@@ -5,7 +5,7 @@ import type { Valore } from '../sql/compare';
 
 const BLOCCO = 200;
 
-function formatta(v: Valore): { testo: string; classe: string } {
+export function formatta(v: Valore): { testo: string; classe: string } {
   if (v === null) return { testo: 'NULL', classe: 'cella-null' };
   if (typeof v === 'number') {
     return { testo: Number.isInteger(v) ? String(v) : String(Number(v.toPrecision(12))), classe: 'cella-num' };

@@ -25,13 +25,16 @@ Il formato è documentato in [`SCHEMA.md`](SCHEMA.md). Il piano di progetto è i
 1. Apri il sito. Lo scenario d'esempio **Università** (7 tabelle, 8 esercizi) è già caricato.
 2. Consulta **Modello ER** e **Modello logico**. Trascina per spostare, pinch o
    rotellina per lo zoom, **⤢** (o doppio tocco) per adattare il diagramma allo schermo.
-3. In **Esercizi** scrivi la query:
+3. In **Dati** (scheda a sé o nel pannello accanto all'editor) consulti le righe reali di ogni tabella:
+   PK evidenziata, FK indicate, NULL distinti dalla stringa vuota, ricerca e paginazione (100 righe per pagina);
+   toccando un valore di chiave esterna salti alla riga referenziata (con «↩ Indietro»).
+4. In **Esercizi** scrivi la query:
    - **Esegui** (o `Ctrl/⌘ + Invio`) mostra il risultato;
    - **Verifica** (o `Ctrl/⌘ + ⇧ + Invio`) lo confronta con la soluzione ufficiale;
    - **Mostra soluzione** rivela la soluzione ufficiale e le alternative.
    Su schermo largo lo schema resta visibile a destra (il divisore si trascina);
    su iPad in verticale si apre con il pulsante **Schema**.
-4. Per un nuovo scenario: **Scenari → «Copia il prompt per generare scenari»** →
+5. Per un nuovo scenario: **Scenari → «Copia il prompt per generare scenari»** →
    incollalo in Claude → copia il blocco JSON della risposta → incollalo in
    **Scenari → Importa testo incollato**.
 
@@ -42,11 +45,29 @@ Bozze e progressi (✓ risolto, tentato, soluzione vista) vengono salvati automa
 Si confrontano i **risultati**, non il testo SQL. La risposta è corretta se il
 risultato coincide con quello di almeno una delle soluzioni ufficiali:
 
-- stesso numero di colonne (i nomi/alias vengono ignorati);
+- stesso numero di colonne; i nomi/alias vengono ignorati e anche **l'ordine delle colonne**:
+  se il risultato coincide solo a meno di una permutazione delle colonne la risposta è
+  corretta, con la nota «colonne in ordine diverso dalla traccia»;
 - righe confrontate come **multiinsieme** (i duplicati contano, l'ordine no);
-- l'ordine conta solo se la soluzione ufficiale ha un `ORDER BY`; le righe a pari
-  merito possono stare in qualunque ordine;
-- i numeri decimali si confrontano con una piccola tolleranza.
+- i numeri sono normalizzati (`1` e `1.0` sono uguali, tolleranza sui decimali), `NULL` è uguale a `NULL`,
+  i testi si confrontano esattamente;
+- l'ordine delle righe conta solo se la soluzione ufficiale ha un `ORDER BY`; le righe a pari
+  valore della chiave di ordinamento possono stare in qualunque ordine, anche quando la chiave
+  non è una colonna del risultato (es. `ORDER BY Cognome` senza selezionare `Cognome`).
+
+**Database di prova.** Oltre ai dati dello scenario, la risposta viene controllata su 6 varianti
+generate automaticamente e in modo riproducibile (seme fisso): sottoinsiemi di righe (con le chiavi
+esterne sempre valide), righe duplicate e valori NULL nelle colonne che li ammettono. La risposta
+è corretta solo se coincide con **una stessa** soluzione di riferimento su tutti i database. Se
+funziona sui dati attuali ma non su una variante ricevi un avviso («funziona sui dati attuali ma non in
+generale») con un suggerimento sui casi da controllare, senza vedere la soluzione. L'esito positivo
+riporta «verificata su N database di prova».
+
+Questo **non è una prova formale di equivalenza**, ma un controllo pratico: le varianti cambiano la
+struttura dei dati (righe tolte, duplicate, NULL), non i valori, quindi una query con costanti scelte
+a mano può ancora passare. Le soluzioni con `LIMIT` si verificano solo sui dati originali (i pareggi
+dipendono dai dati). Sul tempo: il controllo completo dell'esempio richiede alcune decine di
+millisecondi in Node; le varianti si costruiscono in background dopo l'apertura dello scenario.
 
 Se la risposta è sbagliata ricevi un feedback utile senza che ti venga
 rivelata la soluzione: colonne in più o in meno, righe mancanti o in più (con un

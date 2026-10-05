@@ -145,14 +145,38 @@ All'importazione ogni soluzione viene **eseguita davvero**:
 L'app esegue la query dello studente e ogni soluzione ufficiale sullo stesso
 database e confronta **i risultati**, non il testo:
 
-1. stesso **numero di colonne** (i nomi delle colonne vengono ignorati);
+1. stesso **numero di colonne**; i nomi delle colonne vengono ignorati e anche il loro **ordine**
+   (se coincide solo a meno di una permutazione, la risposta è corretta con una nota);
 2. righe confrontate come **multiinsieme**: i duplicati contano, l'ordine no;
 3. l'**ordine** conta solo se la soluzione ufficiale contiene un `ORDER BY`
-   al livello più esterno. Se l'ORDER BY usa colonne del risultato (nome, alias
-   o posizione), le righe a pari merito possono stare in qualunque ordine;
-4. i **numeri decimali** sono confrontati con una tolleranza relativa di 1e-6;
-   `NULL` coincide con `NULL`;
-5. la risposta è corretta se coincide con **almeno una** soluzione.
+   al livello più esterno. Le righe a pari valore della chiave di ordinamento possono stare in
+   qualunque ordine (anche se la chiave non è una colonna del risultato);
+4. i **numeri** sono normalizzati (`1` = `1.0`) con una tolleranza relativa di 1e-6;
+   `NULL` coincide con `NULL`; i testi si confrontano esattamente;
+5. la risposta è corretta se coincide con **una stessa soluzione** sui dati dello scenario **e su 6
+   database di prova**.
+
+### Database di prova
+
+Per ridurre le coincidenze fortuite l'app genera, a partire dai dati dello scenario, 6 varianti
+riproducibili (seme fisso): righe tolte (a cascata sulle chiavi esterne, o chiave esterna messa a
+NULL se facoltativa), righe duplicate con nuova chiave primaria e valori NULL. Valgono queste regole,
+che dipendono da come è scritto lo scenario:
+
+- i **NULL** vengono inseriti solo nelle colonne che il database ammette (senza `NOT NULL` né
+  `PRIMARY KEY`) **e** che il modello logico dichiara `"nullable": true`: se descrivi una colonna in
+  `logico` senza `nullable: true` si considera obbligatoria. Indica quindi `nullable` in modo coerente;
+- le **chiavi esterne** usate sono quelle dei `REFERENCES` nei `CREATE TABLE` e quelle di
+  `logico.chiaviEsterne`: dichiarale correttamente, altrimenti le righe tolte possono lasciare riferimenti
+  orfani;
+- vincoli `UNIQUE`, `CHECK` e `NOT NULL` vengono rispettati (le righe che li violerebbero si scartano);
+- una soluzione ufficiale che dà errore su una variante fa scartare quella variante;
+- le soluzioni con `LIMIT` si verificano solo sui dati originali.
+
+Le soluzioni alternative di un esercizio devono essere equivalenti **anche sulle varianti**: all'import
+un avviso segnala quelle che coincidono sui dati attuali ma non su un database di prova (es. una
+divisione scritta con `COUNT` che non gestisce il divisore vuoto). Il controllo è pratico, **non una
+prova formale di equivalenza**.
 
 ## ⚠️ Fragilità della verifica e casi limite obbligatori
 

@@ -741,7 +741,8 @@ kbd {
   gap: 8px;
 }
 
-.chips {
+.chips,
+.chips-tabelle {
   flex: 1;
   display: flex;
   gap: 6px;
@@ -751,7 +752,8 @@ kbd {
   min-width: 0;
 }
 
-.chip {
+.chip,
+.chip-tabella {
   flex: none;
   min-height: 44px;
   min-width: 52px;
@@ -1523,4 +1525,179 @@ kbd {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ---------- vista Dati ---------- */
+
+.vista-dati {
+  gap: 8px;
+}
+
+.chips-tabelle {
+  flex: none;
+  padding-bottom: 4px;
+}
+
+.chip-tabella {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip-tabella[aria-selected='true'] {
+  background: var(--primario-tenue);
+  border-color: var(--primario);
+  color: var(--primario);
+  outline: none;
+}
+
+.conteggio {
+  min-width: 1.6em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--superficie-2);
+  color: var(--testo-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.barra-dati {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.campo-ricerca {
+  flex: 1;
+}
+
+.filtro-fk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--d-fk);
+  border-radius: var(--raggio);
+  background: color-mix(in srgb, var(--d-fk) 10%, var(--superficie));
+  min-width: 0;
+}
+
+.filtro-testo {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
+.btn-chiudi-filtro {
+  flex: none;
+  border: 0;
+  background: transparent;
+}
+
+.paginazione {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.info-pagina {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  color: var(--testo-2);
+  font-size: 0.85rem;
+}
+
+.dati-contenuto {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dati-contenuto .tabella-scroll {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+}
+
+.vuoto-dati {
+  padding: 16px;
+  border: 1px dashed var(--bordo);
+  border-radius: var(--raggio);
+}
+
+.tabella-dati th {
+  vertical-align: bottom;
+}
+
+.nome-colonna {
+  font-weight: 700;
+}
+
+.nome-colonna.sottolineato {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tipo-colonna {
+  color: var(--testo-2);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.badge-riga {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.badge-pk {
+  background: var(--primario-tenue);
+  color: var(--primario);
+}
+
+.badge-fk {
+  background: color-mix(in srgb, var(--d-fk) 16%, var(--superficie));
+  color: var(--d-fk);
+}
+
+.tabella-risultati td.cella-fk {
+  padding: 0;
+}
+
+.valore-fk {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--d-fk);
+  text-align: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+  font-variant-numeric: tabular-nums;
+}
+
+.valore-fk:active {
+  background: color-mix(in srgb, var(--d-fk) 14%, transparent);
 }

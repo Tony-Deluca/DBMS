@@ -105,3 +105,39 @@ export function colonneOrdinamento(voci: VoceOrdinamento[], colonne: string[]): 
   }
   return indici;
 }
+
+/** true se la query ha un LIMIT/OFFSET al livello più esterno (il risultato dipende dai pareggi). */
+export function haLimitEsterno(sql: string): boolean {
+  return tokenize(sql).token.some((t) => t.profondita === 0 && t.tipo === 'parola' && (t.upper === 'LIMIT' || t.upper === 'OFFSET'));
+}
+
+export interface QueryConChiavi {
+  sql: string;
+  /** numero di colonne aggiunte in fondo: i valori delle chiavi d'ordinamento */
+  chiavi: number;
+}
+
+/**
+ * Riscrive una SELECT aggiungendo in fondo all'elenco delle colonne le espressioni dell'ORDER BY più esterno
+ * (`SELECT a, b FROM t ORDER BY c` → `SELECT a, b, (c) AS __k1 FROM t ORDER BY c`), così si conoscono i
+ * valori delle chiavi anche quando non sono colonne del risultato.
+ * Restituisce null se la riscrittura non è sicura (DISTINCT, UNION/EXCEPT/INTERSECT, voci posizionali…):
+ * aggiungerebbe o cambierebbe righe.
+ */
+export function riscriviConChiavi(sql: string, voci: VoceOrdinamento[]): QueryConChiavi | null {
+  if (voci.length === 0 || voci.some((v) => /^\d+$/.test(v.espressione.trim()))) return null;
+  const { token } = tokenize(sql);
+  const sulPrimoLivello = token.filter((t) => t.profondita === 0 && t.tipo === 'parola');
+  if (sulPrimoLivello.some((t) => ['UNION', 'EXCEPT', 'INTERSECT'].includes(t.upper))) return null;
+  const select = sulPrimoLivello.filter((t) => t.upper === 'SELECT');
+  if (select.length !== 1) return null;
+  const idxSelect = token.indexOf(select[0]);
+  const dopo = token[idxSelect + 1];
+  if (dopo && dopo.tipo === 'parola' && (dopo.upper === 'DISTINCT' || dopo.upper === 'ALL')) {
+    if (dopo.upper === 'DISTINCT') return null;
+  }
+  const from = token.slice(idxSelect).find((t) => t.profondita === 0 && t.tipo === 'parola' && t.upper === 'FROM');
+  if (!from) return null;
+  const chiavi = voci.map((v, i) => `(${v.espressione}) AS __k${i + 1}`).join(', ');
+  return { sql: `${sql.slice(0, from.inizio).trimEnd()}, ${chiavi} ${sql.slice(from.inizio)}`, chiavi: voci.length };
+}

@@ -52,7 +52,7 @@ test.describe('Palestra SQL', () => {
     await scriviQuery(page, 'SELECT Matricola, Cognome, Nome FROM Studente WHERE AnnoIscrizione >= 2023 ORDER BY Cognome, Nome');
     await page.getByRole('button', { name: /Esegui/ }).click();
     await expect(page.locator('.risultati-info')).toContainText('8 righe · 3 colonne');
-    await expect(page.locator('.tabella-risultati tbody tr')).toHaveCount(8);
+    await expect(page.locator('.area-risultati .tabella-risultati tbody tr')).toHaveCount(8);
 
     // Verifica corretta
     await page.getByRole('button', { name: /Verifica/ }).click();
@@ -211,13 +211,13 @@ test.describe('Palestra SQL', () => {
     await apri(page);
     await scriviQuery(page, 'SELECT * FROM Studente s JOIN CorsoDiLaurea l ON l.Codice = s.CorsoDiLaurea JOIN Esame e ON e.Studente = s.Matricola');
     await page.getByRole('button', { name: /Esegui/ }).click();
-    const scroll = page.locator('.tabella-scroll');
+    const scroll = page.locator('.area-risultati .tabella-scroll');
     await expect(scroll).toBeVisible();
     const m = await scroll.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
     expect(m.sw).toBeGreaterThan(m.cw);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
-    const troncate = await page.locator('.tabella-risultati td').evaluateAll((tds) =>
+    const troncate = await page.locator('.area-risultati .tabella-risultati td').evaluateAll((tds) =>
       tds.filter((td) => td.scrollWidth > td.clientWidth + 1 || getComputedStyle(td).textOverflow === 'ellipsis').length,
     );
     expect(troncate).toBe(0);
@@ -256,7 +256,7 @@ test.describe('Palestra SQL', () => {
     await page.waitForFunction(() => !!window.__palestra?.stato.schemaDb);
     await scriviQuery(page, 'SELECT COUNT(*) FROM Esame');
     await page.getByRole('button', { name: /Esegui/ }).click();
-    await expect(page.locator('.tabella-risultati td').nth(1)).toHaveText('33');
+    await expect(page.locator('.area-risultati .tabella-risultati td').nth(1)).toHaveText('33');
     await context.setOffline(false);
   });
 });
@@ -308,5 +308,5 @@ test('una query infinita viene interrotta e il database ricaricato', async ({ pa
   await expect(page.locator('.messaggio-errore')).toContainText('Query interrotta', { timeout: 20_000 });
   await scriviQuery(page, 'SELECT COUNT(*) FROM Studente');
   await page.getByRole('button', { name: /Esegui/ }).click();
-  await expect(page.locator('.tabella-risultati td').nth(1)).toHaveText('14');
+  await expect(page.locator('.area-risultati .tabella-risultati td').nth(1)).toHaveText('14');
 });

@@ -7,6 +7,7 @@ export function apriGuida(): void {
     <ol>
       <li>Scegli uno scenario in alto (c'è già l'esempio «Università»), oppure importane uno nuovo da <strong>Scenari</strong>.</li>
       <li>Studia il <strong>Modello ER</strong> e il <strong>Modello logico</strong>: puoi trascinare, zoomare (pinch o rotellina) e premere <strong>⤢</strong> per adattare il diagramma allo schermo.</li>
+      <li>In <strong>Dati</strong> consulti le righe reali di ogni tabella (ricerca, pagine da 100 righe; toccando una chiave esterna salti alla riga referenziata).</li>
       <li>In <strong>Esercizi</strong> scrivi la query. <strong>Esegui</strong> mostra il risultato, <strong>Verifica</strong> lo confronta con la soluzione ufficiale.
       Su schermo largo lo schema resta visibile a destra; su schermo stretto lo apri con il pulsante <strong>Schema</strong>.</li>
     </ol>
@@ -15,14 +16,15 @@ export function apriGuida(): void {
     <h3>Come viene verificata la risposta</h3>
     <p>Si confrontano i <em>risultati</em>, non il testo SQL: la tua query è corretta se il risultato coincide con quello di almeno una delle soluzioni ufficiali.</p>
     <ul>
-      <li>Deve avere lo stesso numero di colonne. I nomi delle colonne (alias) non contano.</li>
+      <li>Deve avere lo stesso numero di colonne. I nomi delle colonne (alias) non contano, e nemmeno il loro ordine (se è diverso dalla traccia ricevi una nota).</li>
       <li>Le righe si confrontano come <strong>multiinsieme</strong>: i duplicati contano, l'ordine no.</li>
       <li>L'ordine conta solo se la soluzione ufficiale ha un <code>ORDER BY</code>; le righe a pari merito possono stare in qualunque ordine.</li>
       <li>I numeri decimali si confrontano con una piccola tolleranza (es. 27.666666 e 27.6666667).</li>
     </ul>
-    <p class="avviso"><strong>Attenzione:</strong> due query diverse possono dare lo stesso risultato <em>per coincidenza</em> sui dati di questo scenario.
-    Un «Corretto» non dimostra che la query sia giusta in generale: confrontala sempre con le soluzioni ufficiali e chiediti se funzionerebbe
-    anche con NULL, duplicati o tabelle vuote. Per questo gli scenari vanno generati con dati che contengono casi limite.</p>
+    <p>La risposta viene controllata anche su alcuni <strong>database di prova</strong>: varianti dei dati con righe tolte, righe duplicate e valori NULL.
+    Se funziona sui dati attuali ma non in generale, te lo segnala senza mostrarti la soluzione.</p>
+    <p class="avviso"><strong>Attenzione:</strong> non è una prova formale di equivalenza ma un controllo pratico: una query con valori scelti a mano può comunque passare.
+    Confrontala sempre con le soluzioni ufficiali e chiediti se funzionerebbe con NULL, duplicati o tabelle vuote. Per questo gli scenari vanno generati con dati che contengono casi limite.</p>
   </section>
   <section class="sezione">
     <h3>Note su SQLite</h3>

@@ -17,7 +17,7 @@ export async function validaCompleto(dati: unknown): Promise<{ problemi: Problem
   if (haErrori(problemi)) return { problemi };
   const s = normalizzaScenario(dati);
   try {
-    const sqlProblemi = await sql.prova(s.database.statements, s.esercizi, s.logico.tabelle.map((t) => t.nome));
+    const sqlProblemi = await sql.prova(s.database.statements, s.esercizi, s.logico.tabelle.map((t) => t.nome), s.logico);
     problemi.push(...sqlProblemi);
   } catch (e) {
     problemi.push({ livello: 'errore', percorso: 'database', messaggio: `impossibile provare lo scenario: ${(e as Error).message}` });

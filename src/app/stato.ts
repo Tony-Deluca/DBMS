@@ -2,7 +2,7 @@
 import type { ScenarioSalvato } from '../scenario/types';
 import type { Progresso } from '../storage/idb';
 
-export type Vista = 'er' | 'logico' | 'esercizi';
+export type Vista = 'er' | 'logico' | 'dati' | 'esercizi';
 
 export interface Stato {
   scenari: ScenarioSalvato[];

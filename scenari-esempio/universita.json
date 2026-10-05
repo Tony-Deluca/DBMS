@@ -681,7 +681,7 @@
       "traccia": "Trova matricola, cognome e nome degli studenti che hanno superato TUTTI i corsi del primo anno del proprio corso di laurea.",
       "soluzioni": [
         "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE NOT EXISTS (\n  SELECT * FROM Corso c\n  WHERE c.CorsoDiLaurea = s.CorsoDiLaurea AND c.Anno = 1\n    AND NOT EXISTS (\n      SELECT * FROM Esame e\n      WHERE e.Studente = s.Matricola AND e.Corso = c.Codice\n    )\n);",
-        "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\n  JOIN Esame e ON e.Studente = s.Matricola\n  JOIN Corso c ON c.Codice = e.Corso\nWHERE c.Anno = 1 AND c.CorsoDiLaurea = s.CorsoDiLaurea\nGROUP BY s.Matricola, s.Cognome, s.Nome, s.CorsoDiLaurea\nHAVING COUNT(*) = (\n  SELECT COUNT(*) FROM Corso c2\n  WHERE c2.CorsoDiLaurea = s.CorsoDiLaurea AND c2.Anno = 1\n);"
+        "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE (\n  SELECT COUNT(*) FROM Corso c\n  WHERE c.CorsoDiLaurea = s.CorsoDiLaurea AND c.Anno = 1\n) = (\n  SELECT COUNT(*) FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Studente = s.Matricola AND c.CorsoDiLaurea = s.CorsoDiLaurea AND c.Anno = 1\n);"
       ],
       "suggerimento": "Divisione: «non esiste un corso del primo anno del suo CdL che lo studente non abbia superato». In alternativa confronta due conteggi."
     }

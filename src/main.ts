@@ -4,6 +4,7 @@ import { stato, on, type Vista as NomeVista } from './app/stato';
 import { apriScenario, assicuraEsempio, caricaScenari, cambiaVista, richiediPersistenza } from './app/azioni';
 import { leggiImpostazione } from './storage/idb';
 import { creaVistaER, creaVistaLogico } from './ui/vistaModelli';
+import { creaVistaDati } from './ui/vistaDati';
 import { creaVistaEsercizi } from './ui/vistaEsercizi';
 import { apriGestioneScenari } from './ui/gestioneScenari';
 import { apriGuida } from './ui/guida';
@@ -59,6 +60,7 @@ btnTema.addEventListener('click', () => {
 const VISTE: { id: NomeVista; nome: string }[] = [
   { id: 'er', nome: 'Modello ER' },
   { id: 'logico', nome: 'Modello logico' },
+  { id: 'dati', nome: 'Dati' },
   { id: 'esercizi', nome: 'Esercizi' },
 ];
 const schede = h('nav', { class: 'schede', role: 'tablist', 'aria-label': 'Viste' });
@@ -78,10 +80,12 @@ const testata = h(
 
 const vistaER = creaVistaER();
 const vistaLogico = creaVistaLogico();
+const vistaDati = creaVistaDati();
 const vistaEsercizi = creaVistaEsercizi();
 const sezioni: Record<NomeVista, HTMLElement> = {
   er: h('section', { class: 'vista', 'aria-label': 'Modello ER' }, vistaER.elemento),
   logico: h('section', { class: 'vista', 'aria-label': 'Modello logico' }, vistaLogico.elemento),
+  dati: h('section', { class: 'vista', 'aria-label': 'Dati' }, vistaDati.elemento),
   esercizi: h('section', { class: 'vista', 'aria-label': 'Esercizi' }, vistaEsercizi.elemento),
 };
 const intestazioneScenario = h('div', { class: 'intestazione-scenario' });
@@ -92,9 +96,10 @@ sostituisci(app, testata, principale);
 const disegnaVista = () => {
   for (const b of schede.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-selected', String(b.dataset.id === stato.vista));
   for (const [id, el] of Object.entries(sezioni)) el.hidden = id !== stato.vista;
-  intestazioneScenario.hidden = stato.vista === 'esercizi';
+  intestazioneScenario.hidden = stato.vista === 'esercizi' || stato.vista === 'dati';
   if (stato.vista === 'er') vistaER.aggiorna();
   if (stato.vista === 'logico') vistaLogico.aggiorna();
+  if (stato.vista === 'dati') vistaDati.aggiorna();
   if (stato.vista === 'esercizi') vistaEsercizi.aggiorna();
 };
 

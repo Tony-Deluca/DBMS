@@ -7,8 +7,9 @@ import { creaEditor, type EditorSQL } from '../editor/sqlEditor';
 import { creaBarraScorciatoie } from './shortcutBar';
 import { tabellaRisultati } from './resultsTable';
 import { creaVistaER, creaVistaLogico, type Vista } from './vistaModelli';
+import { creaVistaDati } from './vistaDati';
 import { sql, ErroreTimeout } from '../sql/client';
-import { messaggiFeedback } from '../sql/compare';
+import { messaggiFeedback, messaggiVarianteFallita, testoDatabaseDiProva } from '../sql/compare';
 import { normalizzaVirgolette } from '../sql/guard';
 import type { Esercizio } from '../scenario/types';
 import { esc } from '../diagram/geometry';
@@ -34,10 +35,12 @@ export function creaVistaEsercizi(): Vista {
   const vER = creaVistaER(true);
   const vLog = creaVistaLogico(true, 'diagramma');
   const vTesto = creaVistaLogico(true, 'testo');
+  const vDati = creaVistaDati(true);
   const schede: { id: string; nome: string; vista: Vista }[] = [
     { id: 'er', nome: 'ER', vista: vER },
     { id: 'logico', nome: 'Logico', vista: vLog },
     { id: 'testo', nome: 'Schema testuale', vista: vTesto },
+    { id: 'dati', nome: 'Dati', vista: vDati },
   ];
   let schedaPannello = 'testo';
   const tabPannello = h('div', { class: 'schede-pannello', role: 'tablist' });
@@ -318,6 +321,7 @@ export function creaVistaEsercizi(): Vista {
       const prec = progresso(e.id);
       aggiornaProgresso(e.id, { stato: v.corretta ? 'risolto' : 'tentato', bozza: q, tentativi: (prec?.tentativi ?? 0) + 1 });
       if (v.corretta) {
+        const prova = testoDatabaseDiProva(v);
         sostituisci(
           esito,
           h(
@@ -329,7 +333,20 @@ export function creaVistaEsercizi(): Vista {
               {},
               v.ordinato ? 'Il risultato coincide con quello atteso, ordine compreso.' : 'Il risultato coincide con quello atteso (l\'ordine delle righe non conta per questo esercizio).',
             ),
-            h('p', { class: 'nota' }, 'Nota: il confronto è fatto sui dati di questo scenario. Puoi confrontare la tua query con le soluzioni ufficiali.'),
+            v.colonnePermutate ? h('p', { class: 'nota-colonne' }, 'Nota: colonne in ordine diverso dalla traccia. Per l\'esame rispetta l\'ordine richiesto.') : null,
+            prova ? h('p', { class: 'nota' }, prova) : null,
+            h('p', { class: 'nota' }, 'Il controllo è pratico, non una prova formale di equivalenza: puoi sempre confrontare la tua query con le soluzioni ufficiali.'),
+          ),
+        );
+      } else if (v.fallitaSuVariante) {
+        sostituisci(
+          esito,
+          h(
+            'div',
+            { class: 'messaggio messaggio-errore', role: 'alert' },
+            h('strong', {}, '✗ Non ancora'),
+            h('ul', {}, messaggiVarianteFallita(v.fallitaSuVariante).map((m) => h('li', {}, m))),
+            h('p', { class: 'nota' }, `Verificata su ${v.databaseDiProva ?? 0} database di prova prima di trovare la differenza.`),
           ),
         );
       } else {

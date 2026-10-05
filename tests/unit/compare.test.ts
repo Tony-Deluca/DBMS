@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Database } from 'sql.js';
 import { creaDatabase, verifica } from '../../src/sql/engine';
-import { confrontaRisultati, differenzaMultiinsiemi, messaggiFeedback, valoriUguali } from '../../src/sql/compare';
+import { confrontaRisultati, differenzaMultiinsiemi, messaggiFeedback, riferimentoDaRisultato, valoriUguali } from '../../src/sql/compare';
 import { colonneOrdinamento, orderByEsterno } from '../../src/sql/orderBy';
 import { sqlJs } from './helpers';
 
@@ -156,6 +156,10 @@ describe('multiinsiemi e ORDER BY', () => {
 
   it('confronto ordinato con espressione non riconducibile: confronta le righe intere', () => {
     const atteso = { colonne: ['a'], righe: [[1], [2]] };
-    expect(confrontaRisultati(atteso, { colonne: ['a'], righe: [[2], [1]] }, 'SELECT a FROM t ORDER BY a * -1').uguale).toBe(false);
+    // senza accesso al database le chiavi di «a * -1» non si conoscono: confronto rigido
+    const rif = riferimentoDaRisultato('SELECT a FROM t ORDER BY a * -1', atteso);
+    expect(rif.ordine).toEqual({ tipo: 'rigido' });
+    expect(confrontaRisultati(rif, { colonne: ['a'], righe: [[2], [1]] }).uguale).toBe(false);
+    expect(confrontaRisultati(rif, { colonne: ['a'], righe: [[1], [2]] }).uguale).toBe(true);
   });
 });

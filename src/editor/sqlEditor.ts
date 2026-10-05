@@ -11,7 +11,7 @@ import {
   highlightSpecialChars,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { sql, SQLite } from '@codemirror/lang-sql';
+import { estensioneSql } from './dialetto';
 import { HighlightStyle, syntaxHighlighting, bracketMatching, indentOnInput } from '@codemirror/language';
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { tags as t } from '@lezer/highlight';
@@ -56,8 +56,7 @@ export function creaEditor(
   opzioni: { onEsegui: () => void; onVerifica: () => void; onCambio: (testo: string) => void },
 ): EditorSQL {
   const linguaggio = new Compartment();
-  const configSql = (schema: Record<string, string[]> | null) =>
-    sql({ dialect: SQLite, upperCaseKeywords: true, schema: schema ?? undefined });
+  const configSql = estensioneSql;
 
   const view = new EditorView({
     parent: genitore,
