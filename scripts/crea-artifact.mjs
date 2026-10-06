@@ -9,9 +9,12 @@ const dist = join(radice, 'dist-artifact');
 const html = readFileSync(join(dist, 'index.html'), 'utf-8');
 const assets = join(dist, 'assets');
 const file = readdirSync(assets);
-const js = file.filter((f) => f.endsWith('.js'));
+// il bundle è quello indicato da index.html; gli altri pezzi (moduli di PGlite per file system su disco o
+// OPFS, mai usati nel browser con la cartella dati in memoria) restano fuori
+const entrata = /<script[^>]*src="\.\/assets\/([^"]+\.js)"/.exec(html)?.[1];
+const js = file.filter((f) => f === entrata);
 const css = file.filter((f) => f.endsWith('.css'));
-if (js.length !== 1) throw new Error(`atteso un solo bundle JS, trovati: ${js.join(', ')}`);
+if (js.length !== 1) throw new Error(`bundle JS non trovato (index.html indica ${entrata}; file: ${file.join(', ')})`);
 
 // </script> dentro il JS chiuderebbe il tag: lo spezzo
 const codice = readFileSync(join(assets, js[0]), 'utf-8').replace(/<\/script/gi, '<\\/script');

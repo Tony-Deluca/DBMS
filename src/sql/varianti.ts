@@ -3,7 +3,7 @@
 // Due query diverse possono coincidere sui dati originali per caso. Per ridurre il rischio la verifica
 // controlla la risposta anche su varianti dei dati in cui mancano righe, ci sono righe duplicate e valori NULL.
 // Non è una prova formale di equivalenza: è un controllo pratico.
-import type { Database, SqlJsStatic } from 'sql.js';
+import { qi, type Db } from './motore';
 import type { ModelloLogico } from '../scenario/types';
 import type { Riferimento } from './compare';
 
@@ -21,7 +21,7 @@ export const PIANI_VARIANTI = [
 
 export interface Variante {
   indice: number;
-  db: Database;
+  db: Db;
   /** Descrizione di cosa è stato modificato: «righe mancanti», «righe duplicate», «valori NULL». */
   caratteristiche: string[];
   /** Risultati delle soluzioni ufficiali su questa variante (null = errore → variante scartata). */
@@ -47,7 +47,10 @@ export const semeVariante = (indice: number) => (0x5eed1234 + (indice + 1) * 791
 // ---------- struttura del database ----------
 
 interface Colonna {
+  /** nome mostrato (con le maiuscole del modello logico, se la colonna vi compare) */
   nome: string;
+  /** nome nel catalogo di PostgreSQL (di solito minuscolo) */
+  reale: string;
   tipo: string;
   notnull: boolean;
   pk: number; // posizione nella chiave primaria (0 = non è PK)
@@ -57,6 +60,7 @@ interface Colonna {
 
 interface Tabella {
   nome: string;
+  reale: string;
   colonne: Colonna[];
   pk: string[];
 }
@@ -75,64 +79,96 @@ export interface Struttura {
   fk: ChiaveEsterna[];
 }
 
-const q = (n: string) => `"${n.replace(/"/g, '""')}"`;
 const k = (s: string) => s.toLowerCase();
+const SEP = '\u0001';
 
-function righe(db: Database, sql: string): (string | number | null | Uint8Array)[][] {
-  return (db.exec(sql)[0]?.values ?? []) as (string | number | null | Uint8Array)[][];
+/** Tabella per nome (mostrato o reale, senza distinguere maiuscole). */
+export function tabellaDi(st: Struttura, nome: string): Tabella | undefined {
+  return st.tabelle.find((t) => t.nome === nome) ?? st.tabelle.find((t) => k(t.nome) === k(nome) || k(t.reale) === k(nome));
+}
+/** Identificatori SQL (quotati con il nome reale) di una tabella e di una sua colonna. */
+export const sqlT = (t: Tabella) => qi(t.reale);
+export function sqlC(t: Tabella, nome: string): string {
+  const c = t.colonne.find((x) => x.nome === nome) ?? t.colonne.find((x) => k(x.nome) === k(nome));
+  return qi(c ? c.reale : nome);
 }
 
-/** Legge tabelle, colonne e chiavi esterne (dichiarate nei CREATE TABLE e nel modello logico). */
-export function leggiStruttura(db: Database, logico: ModelloLogico | null): Struttura {
-  const nomi = righe(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").map((r) => String(r[0]));
+async function righe(db: Db, sql: string, parametri: (string | number | null)[] = []) {
+  return (await db.m.interna(db.schema, sql, parametri)).righe;
+}
+
+/** Legge tabelle, colonne e chiavi esterne (dal catalogo di PostgreSQL e dal modello logico). */
+export async function leggiStruttura(db: Db, logico: ModelloLogico | null): Promise<Struttura> {
+  const info = await righe(
+    db,
+    `SELECT c.relname, a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull::int, COALESCE(array_position(pk.conkey, a.attnum), 0)
+     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+     LEFT JOIN pg_constraint pk ON pk.conrelid = c.oid AND pk.contype = 'p'
+     WHERE n.nspname = $1 AND c.relkind IN ('r', 'p')
+     ORDER BY c.relname, a.attnum`,
+    [db.schema],
+  );
   const tabelle: Tabella[] = [];
-  const fk: ChiaveEsterna[] = [];
-  for (const nome of nomi) {
-    const info = righe(db, `PRAGMA table_info(${q(nome)})`);
-    const logicaT = logico?.tabelle.find((t) => k(t.nome) === k(nome));
-    const colonne: Colonna[] = info.map((r) => {
-      const cn = String(r[1]);
-      const lc = logicaT?.colonne.find((c) => k(c.nome) === k(cn));
-      const notnull = Number(r[3]) === 1;
-      const pk = Number(r[5]);
-      // il modello logico, se descrive la colonna, ha l'ultima parola: nullable assente = obbligatoria
-      const ammessoDalModello = lc ? lc.nullable === true : true;
-      return { nome: cn, tipo: String(r[2] ?? ''), notnull, pk, annullabile: !notnull && pk === 0 && ammessoDalModello };
+  for (const [rt, rc, tipo, notnullN, pkN] of info) {
+    const reale = String(rt);
+    let t = tabelle.find((x) => x.reale === reale);
+    if (!t) {
+      const lt = logico?.tabelle.find((x) => k(x.nome) === k(reale));
+      t = { nome: lt && reale === k(reale) ? lt.nome : reale, reale, colonne: [], pk: [] };
+      tabelle.push(t);
+    }
+    const lt = logico?.tabelle.find((x) => k(x.nome) === k(reale));
+    const cr = String(rc);
+    const lc = lt?.colonne.find((c) => k(c.nome) === k(cr));
+    const notnull = Number(notnullN) === 1;
+    const pk = Number(pkN);
+    // il modello logico, se descrive la colonna, ha l'ultima parola: nullable assente = obbligatoria
+    const ammessoDalModello = lc ? lc.nullable === true : true;
+    t.colonne.push({
+      nome: lc && cr === k(cr) ? lc.nome : cr,
+      reale: cr,
+      tipo: String(tipo ?? '').toUpperCase(),
+      notnull,
+      pk,
+      annullabile: !notnull && pk === 0 && ammessoDalModello,
     });
-    tabelle.push({ nome, colonne, pk: colonne.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk).map((c) => c.nome) });
   }
-  const pkDi = (t: string) => tabelle.find((x) => k(x.nome) === k(t))?.pk ?? [];
+  for (const t of tabelle) t.pk = t.colonne.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk).map((c) => c.nome);
+  tabelle.sort((a, b) => k(a.nome).localeCompare(k(b.nome)));
+
+  const fk: ChiaveEsterna[] = [];
   const chiave = (f: ChiaveEsterna) => `${k(f.tabella)}|${f.colonne.map(k).join(',')}|${k(f.rifTabella)}|${f.rifColonne.map(k).join(',')}`;
   const viste = new Set<string>();
   const aggiungi = (f: ChiaveEsterna) => {
     if (f.colonne.length === 0 || f.colonne.length !== f.rifColonne.length) return;
-    if (!tabelle.some((t) => k(t.nome) === k(f.tabella)) || !tabelle.some((t) => k(t.nome) === k(f.rifTabella))) return;
+    if (!tabellaDi({ tabelle, fk }, f.tabella) || !tabellaDi({ tabelle, fk }, f.rifTabella)) return;
     if (viste.has(chiave(f))) return;
     viste.add(chiave(f));
     fk.push(f);
   };
-  for (const t of tabelle) {
-    const per = new Map<number, { rif: string; da: string[]; a: (string | null)[] }>();
-    for (const r of righe(db, `PRAGMA foreign_key_list(${q(t.nome)})`)) {
-      const id = Number(r[0]);
-      const e = per.get(id) ?? { rif: String(r[2]), da: [], a: [] };
-      e.da.push(String(r[3]));
-      e.a.push(r[4] === null ? null : String(r[4]));
-      per.set(id, e);
-    }
-    for (const e of per.values()) {
-      const rifPk = pkDi(e.rif);
-      aggiungi({ tabella: t.nome, colonne: e.da, rifTabella: e.rif, rifColonne: e.a.map((x, i) => x ?? rifPk[i] ?? '') });
-    }
+  const dichiarate = await righe(
+    db,
+    `SELECT c.relname, f.relname,
+       (SELECT string_agg(a.attname, chr(1) ORDER BY x.i) FROM unnest(con.conkey) WITH ORDINALITY x(n, i) JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = x.n),
+       (SELECT string_agg(a.attname, chr(1) ORDER BY x.i) FROM unnest(con.confkey) WITH ORDINALITY x(n, i) JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = x.n)
+     FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_class f ON f.oid = con.confrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE con.contype = 'f' AND n.nspname = $1
+     ORDER BY c.relname, con.conname`,
+    [db.schema],
+  );
+  for (const [t, rif, da, a] of dichiarate) {
+    aggiungi({ tabella: String(t), colonne: String(da ?? '').split(SEP), rifTabella: String(rif), rifColonne: String(a ?? '').split(SEP) });
   }
   for (const t of logico?.tabelle ?? []) {
     for (const f of t.chiaviEsterne ?? []) {
       aggiungi({ tabella: t.nome, colonne: f.colonne, rifTabella: f.tabella, rifColonne: f.riferimenti });
     }
   }
-  // rinomina secondo il nome reale delle tabelle e colonne (il logico può usare altre maiuscole)
-  const reale = (t: string) => tabelle.find((x) => k(x.nome) === k(t))!;
-  const colReale = (t: string, c: string) => reale(t).colonne.find((x) => k(x.nome) === k(c))?.nome;
+  // nomi mostrati delle tabelle e delle colonne
+  const reale = (t: string) => tabellaDi({ tabelle, fk }, t)!;
+  const colReale = (t: string, c: string) => reale(t).colonne.find((x) => k(x.nome) === k(c) || k(x.reale) === k(c))?.nome;
   const fkOk: ChiaveEsterna[] = [];
   for (const f of fk) {
     const da = f.colonne.map((c) => colReale(f.tabella, c));
@@ -149,47 +185,50 @@ export function leggiStruttura(db: Database, logico: ModelloLogico | null): Stru
   }
   // una colonna a cui altre tabelle fanno riferimento non va resa NULL
   for (const f of fkOk) {
-    const c = reale(f.rifTabella).colonne.find((x) => f.rifColonne.includes(x.nome));
-    if (c) for (const nome of f.rifColonne) reale(f.rifTabella).colonne.find((x) => x.nome === nome)!.annullabile = false;
+    for (const nome of f.rifColonne) {
+      const c = reale(f.rifTabella).colonne.find((x) => x.nome === nome);
+      if (c) c.annullabile = false;
+    }
   }
   return { tabelle, fk: fkOk };
 }
 
 // ---------- operazioni sui dati ----------
 
-function haRowid(db: Database, tabella: string): boolean {
-  try {
-    db.exec(`SELECT rowid FROM ${q(tabella)} LIMIT 1`);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function eseguiBlocchi(db: Database, prefisso: string, ids: number[], suffisso = ''): number {
+async function eseguiBlocchi(db: Db, prefisso: string, ids: string[], suffisso = ''): Promise<number> {
   let n = 0;
   for (let i = 0; i < ids.length; i += 400) {
-    db.run(`${prefisso} (${ids.slice(i, i + 400).join(',')})${suffisso}`);
-    n += db.getRowsModified();
+    const lista = ids.slice(i, i + 400).map((x) => `'${x}'::tid`).join(',');
+    n += await db.m.modifica(db.schema, `${prefisso} (${lista})${suffisso}`);
   }
   return n;
+}
+
+async function ctid(db: Db, t: Tabella): Promise<string[]> {
+  return (await righe(db, `SELECT ctid::text FROM ${sqlT(t)}`)).map((r) => String(r[0]));
+}
+
+function condizioneOrfana(st: Struttura, f: ChiaveEsterna, alias: string): string {
+  const t = tabellaDi(st, f.tabella)!;
+  const p = tabellaDi(st, f.rifTabella)!;
+  const tutteNonNull = f.colonne.map((c) => `${alias}.${sqlC(t, c)} IS NOT NULL`).join(' AND ');
+  const uguali = f.colonne.map((c, i) => `__p.${sqlC(p, f.rifColonne[i])} = ${alias}.${sqlC(t, c)}`).join(' AND ');
+  return `${tutteNonNull} AND NOT EXISTS (SELECT 1 FROM ${sqlT(p)} AS __p WHERE ${uguali})`;
 }
 
 /**
  * Rende di nuovo valide le chiavi esterne dopo la cancellazione di righe: le righe «orfane» con chiave
  * esterna facoltativa ricevono NULL, le altre vengono cancellate (a cascata).
  */
-function cascata(db: Database, fk: ChiaveEsterna[]): number {
+async function cascata(db: Db, st: Struttura): Promise<number> {
   let totale = 0;
   for (let giro = 0; giro < 12; giro++) {
     let cambiato = 0;
-    for (const f of fk) {
-      const tutteNonNull = f.colonne.map((c) => `${q(f.tabella)}.${q(c)} IS NOT NULL`).join(' AND ');
-      const uguali = f.colonne.map((c, i) => `__p.${q(f.rifColonne[i])} = ${q(f.tabella)}.${q(c)}`).join(' AND ');
-      const orfana = `${tutteNonNull} AND NOT EXISTS (SELECT 1 FROM ${q(f.rifTabella)} AS __p WHERE ${uguali})`;
-      if (f.annullabile) db.run(`UPDATE ${q(f.tabella)} SET ${f.colonne.map((c) => `${q(c)} = NULL`).join(', ')} WHERE ${orfana}`);
-      else db.run(`DELETE FROM ${q(f.tabella)} WHERE ${orfana}`);
-      cambiato += db.getRowsModified();
+    for (const f of st.fk) {
+      const t = tabellaDi(st, f.tabella)!;
+      const orfana = condizioneOrfana(st, f, sqlT(t));
+      if (f.annullabile) cambiato += await db.m.modifica(db.schema, `UPDATE ${sqlT(t)} SET ${f.colonne.map((c) => `${sqlC(t, c)} = NULL`).join(', ')} WHERE ${orfana}`);
+      else cambiato += await db.m.modifica(db.schema, `DELETE FROM ${sqlT(t)} WHERE ${orfana}`);
     }
     totale += cambiato;
     if (cambiato === 0) break;
@@ -197,37 +236,35 @@ function cascata(db: Database, fk: ChiaveEsterna[]): number {
   return totale;
 }
 
-export function violazioniChiaviEsterne(db: Database, fk: ChiaveEsterna[]): number {
+export async function violazioniChiaviEsterne(db: Db, st: Struttura): Promise<number> {
   let n = 0;
-  for (const f of fk) {
-    const tutteNonNull = f.colonne.map((c) => `t.${q(c)} IS NOT NULL`).join(' AND ');
-    const uguali = f.colonne.map((c, i) => `__p.${q(f.rifColonne[i])} = t.${q(c)}`).join(' AND ');
-    n += Number(righe(db, `SELECT COUNT(*) FROM ${q(f.tabella)} AS t WHERE ${tutteNonNull} AND NOT EXISTS (SELECT 1 FROM ${q(f.rifTabella)} AS __p WHERE ${uguali})`)[0][0]);
+  for (const f of st.fk) {
+    const t = tabellaDi(st, f.tabella)!;
+    n += Number((await righe(db, `SELECT COUNT(*) FROM ${sqlT(t)} AS t WHERE ${condizioneOrfana(st, f, 't')}`))[0][0]);
   }
   return n;
 }
 
-function rimuoviRighe(db: Database, st: Struttura, p: number, rng: () => number): number {
+async function rimuoviRighe(db: Db, st: Struttura, p: number, rng: () => number): Promise<number> {
   let tolte = 0;
   const referenziate = new Set(st.fk.map((f) => k(f.rifTabella)));
   for (const t of st.tabelle) {
-    if (!haRowid(db, t.nome)) continue;
-    const ids = righe(db, `SELECT rowid FROM ${q(t.nome)}`).map((r) => Number(r[0]));
+    const ids = await ctid(db, t);
     // le tabelle «genitore» perdono meno righe: la cancellazione si propaga ai figli e svuoterebbe tutto
     const pt = referenziate.has(k(t.nome)) ? p * 0.35 : p;
     const da = ids.filter(() => rng() < pt);
-    tolte += eseguiBlocchi(db, `DELETE FROM ${q(t.nome)} WHERE rowid IN`, da);
+    tolte += await eseguiBlocchi(db, `DELETE FROM ${sqlT(t)} WHERE ctid IN`, da);
   }
-  return tolte + cascata(db, st.fk);
+  return tolte + (await cascata(db, st));
 }
 
-function duplicaRighe(db: Database, st: Struttura, p: number, rng: () => number): number {
+async function duplicaRighe(db: Db, st: Struttura, p: number, rng: () => number): Promise<number> {
   let inserite = 0;
   for (const t of st.tabelle) {
-    const dati = righe(db, `SELECT * FROM ${q(t.nome)}`);
+    const dati = await righe(db, `SELECT * FROM ${sqlT(t)}`);
     if (dati.length === 0) continue;
     const nomi = t.colonne.map((c) => c.nome);
-    const sql = `INSERT OR IGNORE INTO ${q(t.nome)} (${nomi.map(q).join(', ')}) VALUES (${nomi.map(() => '?').join(', ')})`;
+    const sql = `INSERT INTO ${sqlT(t)} (${t.colonne.map((c) => qi(c.reale)).join(', ')}) OVERRIDING SYSTEM VALUE VALUES (${nomi.map((_, i) => `$${i + 1}`).join(', ')}) ON CONFLICT DO NOTHING`;
     const scelte = dati.filter(() => rng() < p).slice(0, 300);
     if (scelte.length === 0) continue;
     // colonna della chiave da variare per non violare la chiave primaria
@@ -235,14 +272,15 @@ function duplicaRighe(db: Database, st: Struttura, p: number, rng: () => number)
     const fkColonna = (c: string) => st.fk.find((f) => k(f.tabella) === k(t.nome) && f.colonne.length === 1 && k(f.colonne[0]) === k(c));
     const daVariare = colPk.find((c) => fkColonna(c.nome)) ?? colPk[0];
     const idx = daVariare ? nomi.indexOf(daVariare.nome) : -1;
-    const interaPk = colPk.length === 1 && /^integer$/i.test(colPk[0].tipo);
+    const interaPk = colPk.length === 1 && /^(INTEGER|BIGINT|SMALLINT)$/.test(colPk[0].tipo);
     let massimo = 0;
     if (idx >= 0 && !fkColonna(daVariare.nome)) {
-      const m = righe(db, `SELECT MAX(${q(daVariare.nome)}) FROM ${q(t.nome)}`)[0][0];
+      const m = (await righe(db, `SELECT MAX(${qi(daVariare.reale)}) FROM ${sqlT(t)}`))[0][0];
       massimo = typeof m === 'number' ? m : 0;
     }
     const fkV = idx >= 0 ? fkColonna(daVariare.nome) : undefined;
-    const valoriPadre = fkV ? righe(db, `SELECT DISTINCT ${q(fkV.rifColonne[0])} FROM ${q(fkV.rifTabella)}`).map((r) => r[0]) : [];
+    const padre = fkV ? tabellaDi(st, fkV.rifTabella)! : null;
+    const valoriPadre = fkV && padre ? (await righe(db, `SELECT DISTINCT ${sqlC(padre, fkV.rifColonne[0])} FROM ${sqlT(padre)}`)).map((r) => r[0]) : [];
     let contatore = 0;
     for (const r of scelte) {
       const v = [...r];
@@ -256,48 +294,55 @@ function duplicaRighe(db: Database, st: Struttura, p: number, rng: () => number)
           v[idx] = `${String(v[idx])}~${contatore}`;
         }
       }
-      db.run(sql, v as (string | number | null)[]);
-      inserite += db.getRowsModified();
+      try {
+        inserite += await db.m.modifica(db.schema, sql, v as (string | number | null)[]);
+      } catch {
+        /* la riga duplicata viola un vincolo (es. CHECK o lunghezza): si salta */
+      }
     }
   }
   return inserite;
 }
 
-function inserisciNull(db: Database, st: Struttura, p: number, rng: () => number): number {
+async function inserisciNull(db: Db, st: Struttura, p: number, rng: () => number): Promise<number> {
   let n = 0;
   for (const t of st.tabelle) {
     const candidate = t.colonne.filter((c) => c.annullabile);
-    if (candidate.length === 0 || !haRowid(db, t.nome)) continue;
-    const ids = righe(db, `SELECT rowid FROM ${q(t.nome)}`).map((r) => Number(r[0]));
+    if (candidate.length === 0) continue;
     for (const c of candidate) {
+      // ctid cambia a ogni UPDATE: si rilegge per ogni colonna
+      const ids = await ctid(db, t);
       const da = ids.filter(() => rng() < p);
-      n += eseguiBlocchi(db, `UPDATE OR IGNORE ${q(t.nome)} SET ${q(c.nome)} = NULL WHERE rowid IN`, da, ` AND ${q(c.nome)} IS NOT NULL`);
+      try {
+        n += await eseguiBlocchi(db, `UPDATE ${sqlT(t)} SET ${qi(c.reale)} = NULL WHERE ctid IN`, da, ` AND ${qi(c.reale)} IS NOT NULL`);
+      } catch {
+        /* un vincolo CHECK non ammette NULL: la colonna resta com'è */
+      }
     }
   }
   return n;
 }
 
-/** Crea la variante `indice` a partire dal database originale serializzato. Null se non è utilizzabile. */
-export function creaVariante(SQL: SqlJsStatic, byte: Uint8Array, st: Struttura, indice: number): Variante | null {
+/** Crea la variante `indice` copiando lo schema originale. Null se non è utilizzabile. */
+export async function creaVariante(origine: Db, st: Struttura, indice: number, schema: string): Promise<Variante | null> {
   const piano = PIANI_VARIANTI[indice % PIANI_VARIANTI.length];
   const rng = generatore(semeVariante(indice));
-  const db = new SQL.Database(byte);
+  const db: Db = { m: origine.m, schema };
   try {
-    db.exec('BEGIN');
+    await db.m.copiaSchema(origine.schema, schema, st.tabelle.map((t) => t.reale));
     const caratteristiche: string[] = [];
-    if (piano.rimuovi > 0 && rimuoviRighe(db, st, piano.rimuovi, rng) > 0) caratteristiche.push('righe mancanti');
-    if (piano.duplica > 0 && duplicaRighe(db, st, piano.duplica, rng) > 0) caratteristiche.push('righe duplicate');
-    if (piano.nulli > 0 && inserisciNull(db, st, piano.nulli, rng) > 0) caratteristiche.push('valori NULL');
-    db.exec('COMMIT');
-    const righeTotali = st.tabelle.reduce((n, t) => n + Number(righe(db, `SELECT COUNT(*) FROM ${q(t.nome)}`)[0][0]), 0);
-    if (caratteristiche.length === 0 || righeTotali === 0 || violazioniChiaviEsterne(db, st.fk) > 0) {
-      db.close();
+    if (piano.rimuovi > 0 && (await rimuoviRighe(db, st, piano.rimuovi, rng)) > 0) caratteristiche.push('righe mancanti');
+    if (piano.duplica > 0 && (await duplicaRighe(db, st, piano.duplica, rng)) > 0) caratteristiche.push('righe duplicate');
+    if (piano.nulli > 0 && (await inserisciNull(db, st, piano.nulli, rng)) > 0) caratteristiche.push('valori NULL');
+    let righeTotali = 0;
+    for (const t of st.tabelle) righeTotali += Number((await righe(db, `SELECT COUNT(*) FROM ${sqlT(t)}`))[0][0]);
+    if (caratteristiche.length === 0 || righeTotali === 0 || (await violazioniChiaviEsterne(db, st)) > 0) {
+      await db.m.eliminaSchemi(schema);
       return null;
     }
-    db.exec('PRAGMA query_only = ON');
     return { indice, db, caratteristiche, riferimenti: new Map() };
   } catch {
-    db.close();
+    await db.m.eliminaSchemi(schema).catch(() => undefined);
     return null;
   }
 }
@@ -305,39 +350,44 @@ export function creaVariante(SQL: SqlJsStatic, byte: Uint8Array, st: Struttura, 
 /** Insieme delle varianti di uno scenario, costruite una alla volta (anche in background). */
 export class VariantiDB {
   private costruite: (Variante | null)[] = [];
-  private struttura: Struttura;
   private chiuso = false;
+  private inCorso: Promise<boolean> | null = null;
 
   constructor(
-    private SQL: SqlJsStatic,
-    private byte: Uint8Array,
-    logico: ModelloLogico | null,
+    private origine: Db,
+    private struttura: Struttura,
+    /** prefisso degli schemi delle varianti (es. «v» → v0, v1, …) */
+    private prefisso: string,
     private quante = NUMERO_VARIANTI,
-  ) {
-    const db = new SQL.Database(byte);
-    try {
-      this.struttura = leggiStruttura(db, logico);
-    } finally {
-      db.close();
-    }
-  }
+  ) {}
 
   /** Costruisce la prossima variante. Restituisce true se ne restano da costruire. */
-  costruisciProssima(): boolean {
-    if (this.chiuso || this.costruite.length >= this.quante) return false;
-    this.costruite.push(creaVariante(this.SQL, this.byte, this.struttura, this.costruite.length));
-    return this.costruite.length < this.quante;
+  costruisciProssima(): Promise<boolean> {
+    // una costruzione alla volta, anche se richiesta sia dal background sia da una verifica
+    this.inCorso ??= (async () => {
+      try {
+        if (this.chiuso || this.costruite.length >= this.quante) return false;
+        const i = this.costruite.length;
+        const v = await creaVariante(this.origine, this.struttura, i, `${this.prefisso}${i}`);
+        if (this.chiuso) return false;
+        this.costruite.push(v);
+        return this.costruite.length < this.quante;
+      } finally {
+        this.inCorso = null;
+      }
+    })();
+    return this.inCorso;
   }
 
   /** Varianti utilizzabili (le costruisce tutte se serve). */
-  tutte(): Variante[] {
-    while (this.costruisciProssima());
+  async tutte(): Promise<Variante[]> {
+    while (await this.costruisciProssima());
     return this.costruite.filter((v): v is Variante => v !== null);
   }
 
-  chiudi() {
+  async chiudi() {
     this.chiuso = true;
-    for (const v of this.costruite) v?.db.close();
     this.costruite = [];
+    await this.origine.m.eliminaSchemi(this.prefisso).catch(() => undefined);
   }
 }

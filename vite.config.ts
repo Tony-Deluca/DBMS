@@ -6,12 +6,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   base: './',
   build: {
-    target: 'es2020',
+    target: 'es2022',
     chunkSizeWarningLimit: 1200,
   },
   worker: {
     format: 'es',
   },
+  // PGlite carica da sé il proprio WebAssembly: non va pre-impacchettato in sviluppo
+  optimizeDeps: { exclude: ['@electric-sql/pglite'] },
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -20,7 +22,7 @@ export default defineConfig({
       manifest: {
         name: 'Palestra SQL — Basi di Dati',
         short_name: 'Palestra SQL',
-        description: 'Esercizi di query SQL con modello ER, modello logico e verifica automatica. Funziona offline.',
+        description: 'Esercizi di query SQL (PostgreSQL) con modello ER, modello logico e verifica automatica. Funziona offline.',
         lang: 'it',
         start_url: '.',
         scope: '.',
@@ -35,8 +37,11 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,wasm,svg,png,ico,webmanifest}'],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // compresi i file del motore PostgreSQL (WebAssembly, file di supporto .data e cartella dati .tar.gz);
+        // initdb.wasm non serve perché la cartella dati arriva già pronta
+        globPatterns: ['**/*.{js,css,html,wasm,data,gz,svg,png,ico,webmanifest}'],
+        globIgnores: ['**/initdb*.wasm'],
+        maximumFileSizeToCacheInBytes: 25 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',
       },
@@ -45,5 +50,8 @@ export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.ts'],
     environment: 'node',
+    // ogni file di test avvia un'istanza di PostgreSQL (PGlite)
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 });

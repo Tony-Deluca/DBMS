@@ -20,16 +20,16 @@ PARAMETRI (se una riga è vuota o dice «scegli tu», decidi tu):
 COSA DEVI PRODURRE
 1. Un modello ER (notazione Atzeni–Ceri) con 4–6 entità e almeno una relazione molti-a-molti con attributi (es. un esame con voto e data, una prenotazione con date). Almeno una cardinalità (0,1) o (0,N). Niente generalizzazioni né relazioni ricorsive, salvo che il dominio le renda davvero naturali.
 2. Il modello logico (4–6 tabelle), coerente con l'ER, con chiavi primarie anche composte come nelle prove d'esame (es. Insegnamento(CF, Codice, AA, Semestre)).
-3. Gli statement SQLite che creano le tabelle (PRIMARY KEY, REFERENCES, NOT NULL dove sensato) e le popolano con dati realistici e PICCOLI: in totale circa 40–90 righe, 6–12 righe nelle tabelle principali. Pochi dati, ma scelti con cura, perché devi poter verificare a mano ogni risultato.
+3. Gli statement PostgreSQL che creano le tabelle e le popolano. Tipi: INTEGER, NUMERIC(p,s), VARCHAR(n) o TEXT, DATE, BOOLEAN; vincoli PRIMARY KEY, REFERENCES, NOT NULL e CHECK dove sensato. Nomi di tabelle e colonne SENZA virgolette doppie, senza spazi né accenti (in PostgreSQL un nome tra virgolette distingue le maiuscole). Dati realistici e PICCOLI: in totale circa 40–90 righe, 6–12 righe nelle tabelle principali. Pochi dati, ma scelti con cura, perché devi poter verificare a mano ogni risultato.
 4. Gli esercizi, in ordine di difficoltà crescente. Usa questi schemi tipici di una prova d'esame, scegliendone 8 diversi (ognuno applicato al dominio scelto):
    a. selezione semplice con condizione e ordinamento;
    b. join su 2–3 tabelle con una condizione (es. «studenti che hanno preso 30»);
    c. «almeno N» con GROUP BY e HAVING (es. «almeno 4 esami», «più di 5 esami con voto maggiore di 27»);
    d. «mai / sempre» su una condizione (es. «non hanno mai preso meno di 27», «esami per cui non è mai stato assegnato un 18», «docenti che hanno sempre insegnato nel primo semestre»): risolvibile con NOT EXISTS, NOT IN o MIN/MAX in HAVING;
-   e. massimo o minimo calcolato su un aggregato (es. «esame con la media più alta», «studente con lo scarto minimo tra voto massimo e minimo»);
+   e. massimo o minimo calcolato su un aggregato (es. «esame con la media più alta», «studente con lo scarto minimo tra voto massimo e minimo»): una soluzione con il confronto quantificato >= ALL / <= ALL, ad es. HAVING AVG(Voto) >= ALL (SELECT AVG(Voto) FROM Esame GROUP BY Studente), e una alternativa con MAX/MIN su una sottoquery nel FROM;
    f. conteggio a zero o anti-join (outer join con 0, NOT EXISTS);
    g. «tutti» / divisione (es. «sedi in cui sono presenti tutti i ruoli», «clienti che hanno prenotato tutti i tipi di camera», «studenti che hanno sostenuto tutti gli insegnamenti di un anno»): doppio NOT EXISTS oppure confronto di conteggi.
-   Per ogni esercizio da 1 a 3 soluzioni EQUIVALENTI scritte in modi diversi (es. JOIN vs IN vs EXISTS). Scrivi solo query semplici e leggibili, come le scriverebbe uno studente preparato: niente funzioni di finestra, niente CTE ricorsive.
+   Per ogni esercizio da 1 a 3 soluzioni EQUIVALENTI scritte in modi diversi (es. JOIN vs IN vs EXISTS vs = ANY; NOT EXISTS vs <> ALL solo se la colonna non ammette NULL). Scrivi solo query semplici e leggibili, come le scriverebbe uno studente preparato: niente funzioni di finestra, niente CTE ricorsive.
 
 STILE DELLE TRACCE
 La traccia è una frase breve e naturale come in una prova d'esame, ad esempio:
@@ -49,11 +49,11 @@ Descrivi brevemente i casi limite presenti nel campo metadati.descrizione.
 
 REGOLE PER GLI ESERCIZI
 - Usa ORDER BY nelle soluzioni solo se la traccia chiede un ordinamento; in quel caso rendi l'ordinamento totale (nessun pareggio ambiguo). Evita LIMIT.
-- Le soluzioni devono essere solo SELECT o WITH, compatibili con SQLite 3 (stringhe con apici '…', date come testo 'AAAA-MM-GG', la divisione tra interi è intera).
+- Le soluzioni devono essere solo SELECT o WITH in SQL standard eseguibile da PostgreSQL: stringhe con apici '…' (le virgolette doppie sono per i nomi), date di tipo DATE confrontate con '2024-01-31' o DATE '2024-01-31', EXTRACT(YEAR FROM Data) per l'anno, la divisione tra interi è intera (usa 1.0 * a / b se serve il decimale). Sono ammessi ALL, ANY/SOME, EXISTS, IN, INTERSECT/EXCEPT e FULL OUTER JOIN. Ogni colonna nel SELECT di una query con GROUP BY deve stare nel GROUP BY o in una funzione aggregata (in PostgreSQL è un errore). Non usare funzioni proprie di SQLite o MySQL (IFNULL, strftime, DATE_FORMAT, LIMIT a, b).
 - Il campo "suggerimento" aiuta senza rivelare la soluzione.
 
 VERIFICA PRIMA DI RISPONDERE
-- Se puoi eseguire codice, crea davvero il database in SQLite ed esegui ogni soluzione. Altrimenti traccia a mano l'esecuzione sui dati, riga per riga.
+- Se puoi eseguire codice, crea davvero il database in PostgreSQL (o, se non puoi, in un motore SQL standard tenendo conto delle differenze) ed esegui ogni soluzione. Altrimenti traccia a mano l'esecuzione sui dati, riga per riga.
 - Ogni soluzione deve restituire un risultato NON vuoto e coerente con la traccia.
 - Le soluzioni alternative dello stesso esercizio devono dare esattamente lo stesso risultato (stesso multiinsieme di righe) e devono restare equivalenti anche se nel database mancano righe, ci sono duplicati o NULL nelle colonne facoltative, o una tabella è vuota (l'app controlla anche su varianti dei dati). Esempio da evitare: una divisione con GROUP BY ... HAVING COUNT(*) = (SELECT COUNT(*) ...) non equivale al doppio NOT EXISTS quando il divisore è vuoto; in quel caso restringi la traccia o scegli soluzioni davvero equivalenti.
 - Per almeno 3 esercizi, controlla che una tipica soluzione sbagliata (JOIN invece di LEFT JOIN, NOT IN con NULL, DISTINCT dimenticato, condizione in WHERE invece che in HAVING, «mai» scritto come «almeno una volta diverso») dia un risultato DIVERSO grazie ai dati. Se non è così, modifica i dati.
@@ -99,8 +99,10 @@ FORMATO JSON (versione 1) — rispetta esattamente nomi e tipi dei campi:
       { "nome": "Cliente",
         "colonne": [
           { "nome": "Codice", "tipo": "INTEGER" },
-          { "nome": "Nome", "tipo": "TEXT" },
-          { "nome": "Telefono", "tipo": "TEXT", "nullable": true }
+          { "nome": "Nome", "tipo": "VARCHAR(50)" },
+          { "nome": "Telefono", "tipo": "VARCHAR(20)", "nullable": true },
+          { "nome": "DataIscrizione", "tipo": "DATE" },
+          { "nome": "Attivo", "tipo": "BOOLEAN" }
         ],
         "chiavePrimaria": ["Codice"],
         "chiaviEsterne": [],
@@ -115,8 +117,8 @@ FORMATO JSON (versione 1) — rispetta esattamente nomi e tipi dei campi:
   },
   "database": {
     "statements": [
-      "CREATE TABLE Cliente (Codice INTEGER PRIMARY KEY, Nome TEXT NOT NULL, Telefono TEXT);",
-      "INSERT INTO Cliente (Codice, Nome, Telefono) VALUES (1, 'Rossi', NULL), (2, 'Bianchi', '333…');"
+      "CREATE TABLE Cliente (Codice INTEGER PRIMARY KEY, Nome VARCHAR(50) NOT NULL, Telefono VARCHAR(20), DataIscrizione DATE NOT NULL, Attivo BOOLEAN NOT NULL DEFAULT TRUE);",
+      "INSERT INTO Cliente (Codice, Nome, Telefono, DataIscrizione, Attivo) VALUES (1, 'Rossi', NULL, '2024-03-01', TRUE), (2, 'Bianchi', '333…', '2023-11-15', FALSE);"
     ]
   },
   "esercizi": [

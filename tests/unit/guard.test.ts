@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { controllaQuery, normalizzaVirgolette } from '../../src/sql/guard';
-import { creaDatabase, esegui } from '../../src/sql/engine';
-import { sqlJs } from './helpers';
+import { esegui } from '../../src/sql/engine';
+import { creaDb } from './helpers';
 
 const ok = (s: string) => controllaQuery(s).ok;
 
@@ -44,10 +44,12 @@ describe('guardia SELECT/WITH', () => {
   });
 
   it('il database resta in sola lettura anche aggirando la guardia', async () => {
-    const SQL = await sqlJs();
-    const { db } = creaDatabase(SQL, ['CREATE TABLE t(a)', 'INSERT INTO t VALUES (1)']);
-    expect(() => db.exec('DELETE FROM t')).toThrow(/readonly/);
-    expect(esegui(db, 'SELECT COUNT(*) FROM t').righe).toEqual([[1]]);
+    const { db } = await creaDb(['CREATE TABLE t(a INTEGER)', 'INSERT INTO t VALUES (1)']);
+    // la transazione READ ONLY blocca le modifiche anche dentro una CTE, e viene sempre annullata
+    await expect(db.m.interroga(db.schema, 'WITH d AS (DELETE FROM t RETURNING *) SELECT COUNT(*) FROM d')).rejects.toThrow(/read-only/);
+    await expect(db.m.interroga(db.schema, 'SELECT * INTO t2 FROM t')).rejects.toThrow(/read-only/);
+    await db.m.interroga(db.schema, "SELECT set_config('search_path', 'pg_catalog', false)");
+    expect((await esegui(db, 'SELECT COUNT(*) FROM t')).righe).toEqual([[1]]);
   });
 
   it('normalizza virgolette e trattini tipografici', () => {

@@ -49,6 +49,42 @@ export function tokenize(sql: string): EsitoTokenize {
       i = fine + 2;
       continue;
     }
+    // stringhe con dollaro di PostgreSQL: $$ … $$ oppure $tag$ … $tag$
+    if (c === '$') {
+      const m = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i));
+      if (m) {
+        const fine = sql.indexOf(m[0], i + m[0].length);
+        if (fine < 0) return { token, errore: `Stringa ${m[0]} … ${m[0]} non chiusa.` };
+        push('stringa', i, fine + m[0].length);
+        i = fine + m[0].length;
+        continue;
+      }
+    }
+    // stringhe con sequenze di escape: E'…' (la barra rovesciata protegge il carattere successivo)
+    if ((c === 'E' || c === 'e') && sql[i + 1] === "'" && !/[A-Za-z0-9_$]/.test(sql[i - 1] ?? '')) {
+      const inizio = i;
+      i += 2;
+      let chiuso = false;
+      while (i < n) {
+        if (sql[i] === '\\') {
+          i += 2;
+          continue;
+        }
+        if (sql[i] === "'") {
+          if (sql[i + 1] === "'") {
+            i += 2;
+            continue;
+          }
+          i++;
+          chiuso = true;
+          break;
+        }
+        i++;
+      }
+      if (!chiuso) return { token, errore: "Stringa non chiusa: manca un apice ' finale." };
+      push('stringa', inizio, i);
+      continue;
+    }
     // stringhe e identificatori quotati
     if (c === "'" || c === '"' || c === '`') {
       const inizio = i;
@@ -108,7 +144,7 @@ export function tokenize(sql: string): EsitoTokenize {
     }
     // operatori di due caratteri
     const due = sql.slice(i, i + 2);
-    if (['<>', '<=', '>=', '!=', '==', '||'].includes(due)) {
+    if (['<>', '<=', '>=', '!=', '==', '||', '::'].includes(due)) {
       push('simbolo', i, i + 2);
       i += 2;
       continue;

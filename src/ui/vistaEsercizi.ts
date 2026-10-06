@@ -13,20 +13,24 @@ import { messaggiFeedback, messaggiVarianteFallita, testoDatabaseDiProva } from 
 import { normalizzaVirgolette } from '../sql/guard';
 import type { Esercizio } from '../scenario/types';
 import { esc } from '../diagram/geometry';
+import { categoriaParola } from '../editor/paroleSql';
 
 const LARGO = '(min-width: 1024px)';
+const AVVIO_MOTORE = 'Avvio del motore SQL (PostgreSQL)… La prima volta può richiedere qualche secondo.';
 
 function pallini(d: number): string {
   return '●'.repeat(d) + '○'.repeat(Math.max(0, 5 - d));
 }
 
-/** Evidenziazione minimale per mostrare le soluzioni (sola lettura). */
+/** Evidenziazione minimale per mostrare le soluzioni (sola lettura), con le stesse parole dell'editor. */
 function sqlEvidenziato(testo: string): string {
-  const kw =
-    /\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|FULL|INNER|OUTER|CROSS|NATURAL|ON|USING|GROUP|BY|HAVING|ORDER|ASC|DESC|AS|AND|OR|NOT|IN|EXISTS|DISTINCT|ALL|ANY|UNION|INTERSECT|EXCEPT|WITH|RECURSIVE|LIMIT|OFFSET|CASE|WHEN|THEN|ELSE|END|IS|NULL|LIKE|BETWEEN|COUNT|SUM|AVG|MIN|MAX)\b/gi;
+  const parola = (m: string) => {
+    const c = categoriaParola(m);
+    return c === 'chiave' ? `<span class="tok-kw">${m}</span>` : c === 'funzione' ? `<span class="tok-fn">${m}</span>` : c === 'tipo' ? `<span class="tok-type">${m}</span>` : m;
+  };
   return testo
     .split(/('(?:[^']|'')*')/)
-    .map((pezzo, i) => (i % 2 === 1 ? `<span class="tok-str">${esc(pezzo)}</span>` : esc(pezzo).replace(kw, (m) => `<span class="tok-kw">${m}</span>`)))
+    .map((pezzo, i) => (i % 2 === 1 ? `<span class="tok-str">${esc(pezzo)}</span>` : esc(pezzo).replace(/\b[A-Za-z_][A-Za-z0-9_]*\b/g, parola)))
     .join('');
 }
 
@@ -295,7 +299,7 @@ export function creaVistaEsercizi(): Vista {
     if (stato.erroreDb) return mostraErrore('Database non disponibile', stato.erroreDb);
     const q = testoQuery();
     bloccaPulsanti(true);
-    sostituisci(esito, h('div', { class: 'messaggio' }, 'Esecuzione in corso…'));
+    sostituisci(esito, h('div', { class: 'messaggio' }, stato.schemaDb ? 'Esecuzione in corso…' : AVVIO_MOTORE));
     try {
       const r = await sql.esegui(q);
       sostituisci(esito);
@@ -315,7 +319,7 @@ export function creaVistaEsercizi(): Vista {
     if (stato.erroreDb) return mostraErrore('Database non disponibile', stato.erroreDb);
     const q = testoQuery();
     bloccaPulsanti(true);
-    sostituisci(esito, h('div', { class: 'messaggio' }, 'Verifica in corso…'));
+    sostituisci(esito, h('div', { class: 'messaggio' }, stato.schemaDb ? 'Verifica in corso…' : AVVIO_MOTORE));
     try {
       const { esito: v, risultato: r } = await sql.verifica(q, e.soluzioni);
       const prec = progresso(e.id);

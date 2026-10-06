@@ -12,8 +12,9 @@ Basi di Dati. Ogni *scenario* contiene:
 In più c'è la sezione **Progettazione**, per disegnare a mano gli schemi degli esercizi di
 progettazione (ER, ER ristrutturato, logico) e farli correggere a un'IA.
 
-Gira tutto nel browser (SQLite compilato in WebAssembly con sql.js): nessun
-server, nessun account. Funziona offline, su PC e su iPad (Safari), e si può
+Gira tutto nel browser (**PostgreSQL** 18 compilato in WebAssembly con [PGlite](https://pglite.dev)): nessun
+server, nessun account. Si scrive SQL standard, compresi i confronti quantificati
+`>= ALL (…)`, `= ANY (…)`, `SOME`, `INTERSECT`/`EXCEPT`, `FULL OUTER JOIN`, date `DATE` ed `EXTRACT`. Funziona offline, su PC e su iPad (Safari), e si può
 installare come app sulla schermata Home.
 
 Gli scenari si generano in una chat con Claude usando il prompt in
@@ -25,7 +26,9 @@ Il formato è documentato in [`SCHEMA.md`](SCHEMA.md). Il piano di progetto è i
 
 ## Uso rapido
 
-1. Apri il sito. Lo scenario d'esempio **Università** (7 tabelle, 8 esercizi) è già caricato.
+1. Apri il sito. Lo scenario d'esempio **Università** (7 tabelle, 10 esercizi, due con `ALL`/`ANY`) è già caricato.
+   Alla prima apertura si scarica anche il motore PostgreSQL (circa 8 MB compressi): l'interfaccia è subito
+   usabile, «Esegui» e «Verifica» aspettano qualche secondo che il motore sia pronto.
 2. Consulta **Modello ER** e **Modello logico**. Trascina per spostare, pinch o
    rotellina per lo zoom, **⤢** (o doppio tocco) per adattare il diagramma allo schermo.
 3. In **Dati** (scheda a sé o nel pannello accanto all'editor) consulti le righe reali di ogni tabella:
@@ -133,8 +136,9 @@ risultato vuoto o alternative non equivalenti.
 
 ## Versione in un unico file HTML
 
-`npm run build:artifact` crea `dist-artifact/palestra-sql.html` (circa 1,4 MB): JS, CSS, worker e
-WebAssembly di SQLite sono incorporati, senza service worker. È pensata per essere pubblicata come
+`npm run build:artifact` crea `dist-artifact/palestra-sql.html` (circa 12 MB): JS, CSS, worker e
+motore PostgreSQL (WebAssembly, file di supporto e cartella dati, compressi) sono incorporati, senza
+service worker. Richiede Safari 16.4 o successivo (decompressione nel browser). È pensata per essere pubblicata come
 pagina privata su claude.ai e aperta da Safari con un link, senza GitHub Pages. Rispetto alla PWA:
 non funziona offline, non ha «Esporta» (i download sono bloccati: si usa «Copia JSON») né
 «Incolla dagli appunti» (si incolla direttamente nel riquadro).
@@ -230,7 +234,8 @@ src/
   ui/         viste (ER, logico, esercizi), dialoghi, pan/zoom, barra scorciatoie
   editor/     CodeMirror 6 configurato per SQL e per iPad
   diagram/    layout automatico (dagre) e rendering SVG di ER e logico
-  sql/        worker sql.js, guardia SELECT/WITH, confronto risultati, errori in italiano
+  sql/        motore PostgreSQL (PGlite) nel worker, guardia SELECT/WITH, confronto risultati,
+              database di prova, errori in italiano; pg/datadir.tar.gz = cartella dati già pronta
   scenario/   tipi, validatore, lettura del JSON incollato, importazione
   storage/    IndexedDB e archiviazione persistente
   progettazione/  modello dei progetti, operazioni, annulla/ripeti, notazione del logico,
@@ -243,18 +248,27 @@ tests/e2e/    layout laptop/iPad, esecuzione e verifica, import per incolla, off
 ### Scelte tecniche
 
 - **Vite + TypeScript** senza framework UI: poche viste e un bundle leggero.
-- **sql.js** in un **Web Worker**: le query non bloccano l'interfaccia e quelle
-  troppo lunghe (oltre 8 s) vengono interrotte ricreando il worker.
-- Sicurezza dei dati: è ammessa una sola istruzione `SELECT`/`WITH`
-  (`WITH … DELETE` compreso tra quelle bloccate), e in più il database è aperto con
-  `PRAGMA query_only = ON`. A ogni apertura dello scenario viene ricreato dagli statement.
+- **PGlite** (PostgreSQL in WebAssembly) in un **Web Worker**: le query non bloccano l'interfaccia e
+  quelle troppo lunghe (oltre 8 s) vengono interrotte ricreando il worker (in PGlite `statement_timeout`
+  non ha effetto). Il motore parte da una **cartella dati già inizializzata**
+  (`src/sql/pg/datadir.tar.gz`, 2,4 MB, creata da `npm run datadir`): avvio in meno di un secondo
+  invece dei 5–6 s di `initdb`. Va rigenerata quando si aggiorna `@electric-sql/pglite`.
+- Dati dello scenario e database di prova sono **schemi** PostgreSQL separati nella stessa istanza.
+  Valori restituiti: `NUMERIC`/`BIGINT` come numeri, date come testo `'AAAA-MM-GG'`, booleani come
+  `true`/`false`; i nomi delle colonne tornano con le maiuscole scritte nella query.
+- Sicurezza dei dati: è ammessa una sola istruzione `SELECT`/`WITH` (bloccati anche le CTE con
+  `DELETE`/`INSERT`/`UPDATE`, `SELECT … INTO`, `SET`, `COPY`, …), e in più ogni interrogazione gira in
+  una transazione `READ ONLY` che viene sempre annullata. A ogni apertura lo scenario viene ricreato.
+- Errori tradotti in italiano a partire dal codice SQLSTATE, con riga e colonna.
+- Un unico elenco di parole chiave, funzioni e tipi (`src/editor/paroleSql.ts`) per evidenziazione,
+  autocompletamento e soluzioni mostrate.
 - **CodeMirror 6** con evidenziazione della sintassi, autocompletamento di tabelle e
   colonne, `autocorrect/autocapitalize/spellcheck` disattivati e font a 16 px (niente
   zoom automatico di iOS).
 - **dagre** per il layout automatico dei diagrammi; gli archi si agganciano ai lati
   delle figure e gli attributi stanno sopra e sotto, così non si sovrappongono.
-- **vite-plugin-pwa** (Workbox): manifest, icone e precache di tutto, compreso il
-  file `.wasm` di SQLite.
+- **vite-plugin-pwa** (Workbox): manifest, icone e precache di tutto, compresi i file del motore
+  (`pglite.wasm` 10 MB, `pglite.data` 6 MB, cartella dati 2,4 MB: circa 8 MB se il server comprime).
 
 ### Limiti noti
 
@@ -264,6 +278,10 @@ tests/e2e/    layout laptop/iPad, esecuzione e verifica, import per incolla, off
   installazione sulla schermata Home, eliminazione dei dati dopo inattività) vanno
   provati su un iPad reale.
 - La verifica confronta i risultati sui dati dello scenario: vedi l'avvertenza sopra.
+- Motore PostgreSQL: provato in Node e in Chromium (avvio ~1 s con la cartella dati già pronta, verifica
+  su 6 database di prova in poche centinaia di ms). Memoria (~135 MB) e tempi su Safari per iPad non
+  sono stati misurati su un dispositivo reale. Il primo download è molto più pesante di prima
+  (≈ 8 MB compressi contro 0,3 MB).
 - Progettazione: i gesti (pressione prolungata, pinch, trascinamento con un dito), la copia
   dell'immagine negli appunti e il salvataggio dei PNG sono provati in Chromium con touch
   emulato, non su Safari per iPad. Gli attributi si dispongono da soli attorno alla figura

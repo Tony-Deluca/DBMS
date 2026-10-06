@@ -6,7 +6,7 @@ const largo = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024;
 
 async function apri(page: Page) {
   await page.goto('./');
-  await expect(page.locator('.chip')).toHaveCount(8);
+  await expect(page.locator('.chip')).toHaveCount(10);
   await page.waitForFunction(() => !!window.__palestra?.stato.schemaDb);
 }
 

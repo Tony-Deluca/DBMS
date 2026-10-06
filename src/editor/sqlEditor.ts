@@ -32,8 +32,9 @@ const evidenziazione = HighlightStyle.define([
   { tag: [t.number, t.bool, t.null], class: 'tok-num' },
   { tag: [t.lineComment, t.blockComment], class: 'tok-com' },
   { tag: [t.operator, t.compareOperator, t.arithmeticOperator, t.logicOperator], class: 'tok-op' },
-  { tag: [t.typeName, t.standard(t.name)], class: 'tok-type' },
-  { tag: [t.function(t.variableName), t.function(t.name)], class: 'tok-fn' },
+  { tag: t.typeName, class: 'tok-type' },
+  // funzioni (COUNT, AVG, UPPER, …): «builtin» del dialetto, vedi paroleSql.ts
+  { tag: [t.standard(t.name), t.function(t.variableName), t.function(t.name)], class: 'tok-fn' },
   { tag: [t.punctuation, t.paren, t.separator, t.bracket], class: 'tok-punct' },
   { tag: t.special(t.name), class: 'tok-ident' },
 ]);

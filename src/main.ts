@@ -1,7 +1,7 @@
 import './styles/main.css';
 import { h, sostituisci, toast } from './ui/dom';
 import { stato, on, type Vista as NomeVista } from './app/stato';
-import { apriScenario, assicuraEsempio, caricaScenari, cambiaVista, richiediPersistenza } from './app/azioni';
+import { aggiornaEsempio, apriScenario, assicuraEsempio, caricaScenari, cambiaVista, richiediPersistenza } from './app/azioni';
 import { leggiImpostazione } from './storage/idb';
 import { creaVistaER, creaVistaLogico } from './ui/vistaModelli';
 import { creaVistaDati } from './ui/vistaDati';
@@ -143,6 +143,7 @@ async function avvia() {
   try {
     await caricaScenari();
     if (stato.scenari.length === 0) await assicuraEsempio();
+    else await aggiornaEsempio();
     const ultimo = await leggiImpostazione<string>('ultimoScenario');
     await apriScenario(ultimo ?? null);
   } catch (e) {

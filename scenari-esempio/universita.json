@@ -294,7 +294,7 @@
           },
           {
             "nome": "ScadenzaContratto",
-            "tipo": "TEXT",
+            "tipo": "DATE",
             "nullable": true
           },
           {
@@ -377,7 +377,7 @@
           },
           {
             "nome": "DataNascita",
-            "tipo": "TEXT",
+            "tipo": "DATE",
             "nullable": false
           },
           {
@@ -489,7 +489,7 @@
           },
           {
             "nome": "Data",
-            "tipo": "TEXT",
+            "tipo": "DATE",
             "nullable": false
           },
           {
@@ -499,7 +499,7 @@
           },
           {
             "nome": "Lode",
-            "tipo": "INTEGER",
+            "tipo": "BOOLEAN",
             "nullable": false
           }
         ],
@@ -572,18 +572,18 @@
   "database": {
     "statements": [
       "CREATE TABLE Dipartimento (\n  Codice TEXT PRIMARY KEY,\n  Nome   TEXT NOT NULL,\n  Sede   TEXT\n);",
-      "CREATE TABLE Docente (\n  Matricola         TEXT PRIMARY KEY,\n  Nome              TEXT NOT NULL,\n  Cognome           TEXT NOT NULL,\n  Email             TEXT,\n  Ruolo             TEXT NOT NULL CHECK (Ruolo IN ('Ordinario', 'Associato', 'Ricercatore')),\n  ScadenzaContratto TEXT,\n  Dipartimento      TEXT REFERENCES Dipartimento(Codice)\n);",
+      "CREATE TABLE Docente (\n  Matricola         TEXT PRIMARY KEY,\n  Nome              TEXT NOT NULL,\n  Cognome           TEXT NOT NULL,\n  Email             TEXT,\n  Ruolo             TEXT NOT NULL CHECK (Ruolo IN ('Ordinario', 'Associato', 'Ricercatore')),\n  ScadenzaContratto DATE,\n  Dipartimento      TEXT REFERENCES Dipartimento(Codice)\n);",
       "CREATE TABLE CorsoDiLaurea (\n  Codice       TEXT PRIMARY KEY,\n  Nome         TEXT NOT NULL,\n  Livello      TEXT NOT NULL CHECK (Livello IN ('Triennale', 'Magistrale')),\n  Dipartimento TEXT NOT NULL REFERENCES Dipartimento(Codice)\n);",
-      "CREATE TABLE Studente (\n  Matricola      INTEGER PRIMARY KEY,\n  Nome           TEXT NOT NULL,\n  Cognome        TEXT NOT NULL,\n  DataNascita    TEXT NOT NULL,\n  Citta          TEXT NOT NULL,\n  AnnoIscrizione INTEGER NOT NULL,\n  Email          TEXT,\n  CorsoDiLaurea  TEXT NOT NULL REFERENCES CorsoDiLaurea(Codice)\n);",
+      "CREATE TABLE Studente (\n  Matricola      INTEGER PRIMARY KEY,\n  Nome           TEXT NOT NULL,\n  Cognome        TEXT NOT NULL,\n  DataNascita    DATE NOT NULL,\n  Citta          TEXT NOT NULL,\n  AnnoIscrizione INTEGER NOT NULL,\n  Email          TEXT,\n  CorsoDiLaurea  TEXT NOT NULL REFERENCES CorsoDiLaurea(Codice)\n);",
       "CREATE TABLE Corso (\n  Codice        TEXT PRIMARY KEY,\n  Nome          TEXT NOT NULL,\n  CFU           INTEGER NOT NULL CHECK (CFU > 0),\n  Anno          INTEGER NOT NULL CHECK (Anno BETWEEN 1 AND 3),\n  Docente       TEXT REFERENCES Docente(Matricola),\n  CorsoDiLaurea TEXT NOT NULL REFERENCES CorsoDiLaurea(Codice)\n);",
-      "CREATE TABLE Esame (\n  Studente INTEGER NOT NULL REFERENCES Studente(Matricola),\n  Corso    TEXT    NOT NULL REFERENCES Corso(Codice),\n  Data     TEXT    NOT NULL,\n  Voto     INTEGER NOT NULL CHECK (Voto BETWEEN 18 AND 30),\n  Lode     INTEGER NOT NULL DEFAULT 0 CHECK (Lode IN (0, 1) AND (Lode = 0 OR Voto = 30)),\n  PRIMARY KEY (Studente, Corso)\n);",
+      "CREATE TABLE Esame (\n  Studente INTEGER NOT NULL REFERENCES Studente(Matricola),\n  Corso    TEXT    NOT NULL REFERENCES Corso(Codice),\n  Data     DATE    NOT NULL,\n  Voto     INTEGER NOT NULL CHECK (Voto BETWEEN 18 AND 30),\n  Lode     BOOLEAN NOT NULL DEFAULT FALSE CHECK (NOT Lode OR Voto = 30),\n  PRIMARY KEY (Studente, Corso)\n);",
       "CREATE TABLE Propedeuticita (\n  Corso        TEXT NOT NULL REFERENCES Corso(Codice),\n  Propedeutico TEXT NOT NULL REFERENCES Corso(Codice),\n  PRIMARY KEY (Corso, Propedeutico),\n  CHECK (Corso <> Propedeutico)\n);",
       "INSERT INTO Dipartimento (Codice, Nome, Sede) VALUES\n  ('DIN', 'Ingegneria dell''Informazione', 'Via Ingegneria 1'),\n  ('DMA', 'Matematica', 'Via Archimede 5'),\n  ('DFI', 'Fisica', 'Via Galilei 2'),\n  ('DEC', 'Economia', NULL);",
       "INSERT INTO Docente (Matricola, Nome, Cognome, Email, Ruolo, ScadenzaContratto, Dipartimento) VALUES\n  ('D01', 'Laura', 'Bianchi', 'laura.bianchi@uni.example', 'Ordinario', NULL, 'DIN'),\n  ('D02', 'Paolo', 'Verdi', 'paolo.verdi@uni.example', 'Associato', NULL, 'DIN'),\n  ('D03', 'Giulia', 'Esposito', NULL, 'Ricercatore', '2027-09-30', 'DIN'),\n  ('D04', 'Marco', 'Ferrari', 'marco.ferrari@uni.example', 'Ordinario', NULL, 'DMA'),\n  ('D05', 'Sara', 'Romano', 'sara.romano@uni.example', 'Associato', NULL, 'DMA'),\n  ('D06', 'Luca', 'Colombo', NULL, 'Ricercatore', '2026-12-31', 'DMA'),\n  ('D07', 'Anna', 'Ricci', 'anna.ricci@uni.example', 'Associato', NULL, 'DIN'),\n  ('D08', 'Franco', 'Gallo', 'franco.gallo@uni.example', 'Ordinario', NULL, 'DEC'),\n  ('D09', 'Elena', 'Bianchi', 'elena.bianchi@uni.example', 'Ricercatore', '2027-03-31', NULL);",
       "INSERT INTO CorsoDiLaurea (Codice, Nome, Livello, Dipartimento) VALUES\n  ('ING-INF', 'Ingegneria Informatica', 'Triennale', 'DIN'),\n  ('ING-GES', 'Ingegneria Gestionale', 'Triennale', 'DIN'),\n  ('MAT', 'Matematica', 'Triennale', 'DMA'),\n  ('ING-INF-M', 'Ingegneria Informatica', 'Magistrale', 'DIN');",
       "INSERT INTO Studente (Matricola, Nome, Cognome, DataNascita, Citta, AnnoIscrizione, Email, CorsoDiLaurea) VALUES\n  (100001, 'Marco', 'Rossi', '2003-04-12', 'Bari', 2023, 'marco.rossi@studenti.uni.example', 'ING-INF'),\n  (100002, 'Giulia', 'Bruno', '2003-09-03', 'Lecce', 2022, NULL, 'ING-INF'),\n  (100003, 'Andrea', 'Conti', '2002-12-20', 'Bari', 2022, 'andrea.conti@studenti.uni.example', 'ING-INF'),\n  (100004, 'Francesca', 'Greco', '2004-01-15', 'Taranto', 2023, 'francesca.greco@studenti.uni.example', 'ING-INF'),\n  (100005, 'Marco', 'Rossi', '2004-07-30', 'Foggia', 2023, 'marco.rossi2@studenti.uni.example', 'ING-INF'),\n  (100006, 'Chiara', 'Marino', '2004-03-08', 'Bari', 2023, NULL, 'ING-GES'),\n  (100007, 'Luca', 'De Luca', '2003-11-11', 'Brindisi', 2022, 'luca.deluca@studenti.uni.example', 'ING-GES'),\n  (100008, 'Sofia', 'Galli', '2005-02-14', 'Bari', 2024, 'sofia.galli@studenti.uni.example', 'ING-INF'),\n  (100009, 'Matteo', 'Lombardi', '2002-06-01', 'Matera', 2021, NULL, 'MAT'),\n  (100010, 'Elisa', 'Moretti', '2003-05-22', 'Bari', 2022, 'elisa.moretti@studenti.uni.example', 'MAT'),\n  (100011, 'Davide', 'Barbieri', '2005-08-09', 'Lecce', 2024, 'davide.barbieri@studenti.uni.example', 'ING-GES'),\n  (100012, 'Alessia', 'Fontana', '2004-10-10', 'Bari', 2023, 'alessia.fontana@studenti.uni.example', 'MAT'),\n  (100013, 'Simone', 'Rizzo', '2005-01-01', 'Bari', 2024, NULL, 'ING-INF'),\n  (100014, 'Giorgio', 'Caruso', '2001-03-03', 'Bari', 2021, 'giorgio.caruso@studenti.uni.example', 'ING-INF');",
       "INSERT INTO Corso (Codice, Nome, CFU, Anno, Docente, CorsoDiLaurea) VALUES\n  ('INF01', 'Analisi Matematica I', 9, 1, 'D04', 'ING-INF'),\n  ('INF02', 'Fondamenti di Informatica', 9, 1, 'D01', 'ING-INF'),\n  ('INF03', 'Geometria e Algebra', 6, 1, 'D05', 'ING-INF'),\n  ('INF04', 'Basi di Dati', 9, 2, 'D01', 'ING-INF'),\n  ('INF05', 'Sistemi Operativi', 9, 2, 'D02', 'ING-INF'),\n  ('INF06', 'Reti di Calcolatori', 6, 3, 'D03', 'ING-INF'),\n  ('INF07', 'Ingegneria del Software', 6, 3, NULL, 'ING-INF'),\n  ('GES01', 'Analisi Matematica I', 9, 1, 'D04', 'ING-GES'),\n  ('GES02', 'Economia e Organizzazione Aziendale', 6, 1, 'D08', 'ING-GES'),\n  ('GES03', 'Ricerca Operativa', 9, 2, 'D09', 'ING-GES'),\n  ('MAT01', 'Algebra Lineare', 12, 1, 'D05', 'MAT'),\n  ('MAT02', 'Analisi Reale', 12, 1, 'D04', 'MAT'),\n  ('MAG01', 'Sistemi Distribuiti', 6, 1, 'D02', 'ING-INF-M');",
-      "INSERT INTO Esame (Studente, Corso, Data, Voto, Lode) VALUES\n  (100001, 'INF01', '2024-01-20', 28, 0),\n  (100001, 'INF02', '2024-02-10', 30, 1),\n  (100001, 'INF03', '2024-06-15', 27, 0),\n  (100001, 'INF04', '2025-01-25', 30, 0),\n  (100002, 'INF01', '2023-02-01', 22, 0),\n  (100002, 'INF02', '2023-06-20', 25, 0),\n  (100002, 'INF03', '2023-09-12', 24, 0),\n  (100003, 'INF01', '2023-01-30', 30, 0),\n  (100003, 'INF02', '2023-02-15', 29, 0),\n  (100003, 'INF04', '2024-02-05', 28, 0),\n  (100003, 'INF05', '2024-07-01', 30, 0),\n  (100004, 'INF02', '2024-02-12', 30, 0),\n  (100004, 'INF03', '2024-07-03', 26, 0),\n  (100005, 'INF01', '2024-06-28', 18, 0),\n  (100006, 'GES01', '2024-01-18', 27, 0),\n  (100006, 'GES02', '2024-02-20', 30, 1),\n  (100007, 'GES01', '2023-02-10', 24, 0),\n  (100007, 'GES02', '2023-06-14', 21, 0),\n  (100007, 'GES03', '2024-01-22', 26, 0),\n  (100008, 'INF02', '2025-02-11', 19, 0),\n  (100009, 'MAT01', '2022-02-03', 30, 0),\n  (100009, 'MAT02', '2022-06-25', 30, 1),\n  (100009, 'INF01', '2023-01-31', 28, 0),\n  (100010, 'MAT01', '2023-02-07', 25, 0),\n  (100010, 'MAT02', '2023-07-10', 27, 0),\n  (100010, 'GES02', '2024-02-21', 28, 0),\n  (100012, 'MAT01', '2024-02-06', 30, 0),\n  (100014, 'INF01', '2022-01-25', 26, 0),\n  (100014, 'INF02', '2022-02-14', 27, 0),\n  (100014, 'INF03', '2022-06-20', 27, 0),\n  (100014, 'INF04', '2023-01-27', 27, 0),\n  (100014, 'INF05', '2023-06-30', 28, 0),\n  (100014, 'INF06', '2024-01-29', 30, 0);",
+      "INSERT INTO Esame (Studente, Corso, Data, Voto, Lode) VALUES\n  (100001, 'INF01', '2024-01-20', 28, FALSE),\n  (100001, 'INF02', '2024-02-10', 30, TRUE),\n  (100001, 'INF03', '2024-06-15', 27, FALSE),\n  (100001, 'INF04', '2025-01-25', 30, FALSE),\n  (100002, 'INF01', '2023-02-01', 22, FALSE),\n  (100002, 'INF02', '2023-06-20', 25, FALSE),\n  (100002, 'INF03', '2023-09-12', 24, FALSE),\n  (100003, 'INF01', '2023-01-30', 30, FALSE),\n  (100003, 'INF02', '2023-02-15', 29, FALSE),\n  (100003, 'INF04', '2024-02-05', 28, FALSE),\n  (100003, 'INF05', '2024-07-01', 30, FALSE),\n  (100004, 'INF02', '2024-02-12', 30, FALSE),\n  (100004, 'INF03', '2024-07-03', 26, FALSE),\n  (100005, 'INF01', '2024-06-28', 18, FALSE),\n  (100006, 'GES01', '2024-01-18', 27, FALSE),\n  (100006, 'GES02', '2024-02-20', 30, TRUE),\n  (100007, 'GES01', '2023-02-10', 24, FALSE),\n  (100007, 'GES02', '2023-06-14', 21, FALSE),\n  (100007, 'GES03', '2024-01-22', 26, FALSE),\n  (100008, 'INF02', '2025-02-11', 19, FALSE),\n  (100009, 'MAT01', '2022-02-03', 30, FALSE),\n  (100009, 'MAT02', '2022-06-25', 30, TRUE),\n  (100009, 'INF01', '2023-01-31', 28, FALSE),\n  (100010, 'MAT01', '2023-02-07', 25, FALSE),\n  (100010, 'MAT02', '2023-07-10', 27, FALSE),\n  (100010, 'GES02', '2024-02-21', 28, FALSE),\n  (100012, 'MAT01', '2024-02-06', 30, FALSE),\n  (100014, 'INF01', '2022-01-25', 26, FALSE),\n  (100014, 'INF02', '2022-02-14', 27, FALSE),\n  (100014, 'INF03', '2022-06-20', 27, FALSE),\n  (100014, 'INF04', '2023-01-27', 27, FALSE),\n  (100014, 'INF05', '2023-06-30', 28, FALSE),\n  (100014, 'INF06', '2024-01-29', 30, FALSE);",
       "INSERT INTO Propedeuticita (Corso, Propedeutico) VALUES\n  ('INF04', 'INF02'),\n  ('INF04', 'INF03'),\n  ('INF05', 'INF02'),\n  ('INF06', 'INF05'),\n  ('MAT02', 'MAT01'),\n  ('GES03', 'GES01');"
     ]
   },
@@ -620,7 +620,7 @@
       "soluzioni": [
         "SELECT DISTINCT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\n  JOIN Esame e ON e.Studente = s.Matricola\n  JOIN Corso c ON c.Codice = e.Corso\nWHERE e.Voto = 30 AND c.Anno = 1;",
         "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE s.Matricola IN (\n  SELECT e.Studente\n  FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Voto = 30 AND c.Anno = 1\n);",
-        "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE EXISTS (\n  SELECT *\n  FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Studente = s.Matricola AND e.Voto = 30 AND c.Anno = 1\n);"
+        "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE s.Matricola = ANY (\n  SELECT e.Studente\n  FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Voto = 30 AND c.Anno = 1\n);"
       ],
       "suggerimento": "Uno studente può avere più di un 30: come eviti i duplicati? Attenzione anche agli studenti omonimi."
     },
@@ -684,6 +684,30 @@
         "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE (\n  SELECT COUNT(*) FROM Corso c\n  WHERE c.CorsoDiLaurea = s.CorsoDiLaurea AND c.Anno = 1\n) = (\n  SELECT COUNT(*) FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Studente = s.Matricola AND c.CorsoDiLaurea = s.CorsoDiLaurea AND c.Anno = 1\n);"
       ],
       "suggerimento": "Divisione: «non esiste un corso del primo anno del suo CdL che lo studente non abbia superato». In alternativa confronta due conteggi."
+    },
+    {
+      "id": "E9",
+      "titolo": "La media più alta",
+      "difficolta": 5,
+      "argomento": "Confronti quantificati (ALL)",
+      "traccia": "Trova matricola, cognome e media dei voti dello studente (o degli studenti, a pari merito) con la media più alta. Considera solo gli studenti che hanno superato almeno un esame.",
+      "soluzioni": [
+        "SELECT s.Matricola, s.Cognome, AVG(e.Voto) AS Media\nFROM Studente s\n  JOIN Esame e ON e.Studente = s.Matricola\nGROUP BY s.Matricola, s.Cognome\nHAVING AVG(e.Voto) >= ALL (\n  SELECT AVG(Voto) FROM Esame GROUP BY Studente\n);",
+        "SELECT s.Matricola, s.Cognome, AVG(e.Voto) AS Media\nFROM Studente s\n  JOIN Esame e ON e.Studente = s.Matricola\nGROUP BY s.Matricola, s.Cognome\nHAVING AVG(e.Voto) = (\n  SELECT MAX(m.Media)\n  FROM (SELECT AVG(Voto) AS Media FROM Esame GROUP BY Studente) m\n);"
+      ],
+      "suggerimento": "Il massimo di una media: confronta la media di ogni studente con TUTTE le medie (>= ALL), oppure con la massima ottenuta da una sottoquery nel FROM."
+    },
+    {
+      "id": "E10",
+      "titolo": "Più CFU di tutti",
+      "difficolta": 5,
+      "argomento": "Confronti quantificati e insiemi vuoti",
+      "traccia": "Trova codice, nome e CFU dei corsi che valgono più CFU di ciascuno dei corsi del secondo anno. Se non ci fossero corsi del secondo anno, la condizione sarebbe vera per tutti i corsi.",
+      "soluzioni": [
+        "SELECT c.Codice, c.Nome, c.CFU\nFROM Corso c\nWHERE c.CFU > ALL (\n  SELECT CFU FROM Corso WHERE Anno = 2\n);",
+        "SELECT c.Codice, c.Nome, c.CFU\nFROM Corso c\nWHERE NOT EXISTS (\n  SELECT * FROM Corso c2\n  WHERE c2.Anno = 2 AND c2.CFU >= c.CFU\n);"
+      ],
+      "suggerimento": "x > ALL (sottoquery) è vero quando la sottoquery è vuota; x > (SELECT MAX(…)) invece no, perché il massimo di un insieme vuoto è NULL."
     }
   ]
 }

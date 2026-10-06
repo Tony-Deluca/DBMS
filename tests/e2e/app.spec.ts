@@ -7,7 +7,7 @@ const largo = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024;
 
 async function apri(page: Page) {
   await page.goto('./');
-  await expect(page.locator('.chip')).toHaveCount(8);
+  await expect(page.locator('.chip')).toHaveCount(10);
   // il database dello scenario è pronto
   await page.waitForFunction(() => !!window.__palestra?.stato.schemaDb);
 }
@@ -21,7 +21,7 @@ async function scriviQuery(page: Page, sql: string) {
 }
 
 async function vaiAEsercizio(page: Page, id: string) {
-  await page.locator('.chip', { hasText: id }).click();
+  await page.locator('.chip', { hasText: new RegExp(`^(✓ )?${id}$`) }).click();
   await expect(page.locator('.traccia-id')).toHaveText(id);
 }
 
@@ -57,7 +57,7 @@ test.describe('Palestra SQL', () => {
     // Verifica corretta
     await page.getByRole('button', { name: /Verifica/ }).click();
     await expect(page.locator('.messaggio-ok')).toContainText('Corretto');
-    await expect(page.locator('.chip', { hasText: 'E1' })).toHaveClass(/stato-risolto/);
+    await expect(page.locator('.chip', { hasText: /^(✓ )?E1$/ })).toHaveClass(/stato-risolto/);
 
     // Ordine sbagliato
     await scriviQuery(page, 'SELECT Matricola, Cognome, Nome FROM Studente WHERE AnnoIscrizione >= 2023 ORDER BY Cognome DESC');
@@ -127,7 +127,7 @@ test.describe('Palestra SQL', () => {
     await scriviQuery(page, 'SELECT 42');
     await page.waitForTimeout(600);
     await page.reload();
-    await expect(page.locator('.chip')).toHaveCount(8);
+    await expect(page.locator('.chip')).toHaveCount(10);
     await vaiAEsercizio(page, 'E5');
     await expect(page.locator('.cm-content')).toContainText('SELECT 42');
   });
@@ -252,7 +252,7 @@ test.describe('Palestra SQL', () => {
     await page.waitForFunction(async () => (await caches.keys()).length > 0 && (await Promise.all((await caches.keys()).map(async (k) => (await (await caches.open(k)).keys()).length))).some((n) => n >= 8));
     await context.setOffline(true);
     await page.reload();
-    await expect(page.locator('.chip')).toHaveCount(8);
+    await expect(page.locator('.chip')).toHaveCount(10);
     await page.waitForFunction(() => !!window.__palestra?.stato.schemaDb);
     await scriviQuery(page, 'SELECT COUNT(*) FROM Esame');
     await page.getByRole('button', { name: /Esegui/ }).click();
@@ -303,7 +303,7 @@ test('una query infinita viene interrotta e il database ricaricato', async ({ pa
   await scriviQuery(page, 'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT COUNT(*) FROM n');
   await page.getByRole('button', { name: /Esegui/ }).click();
   // l'interfaccia resta reattiva durante l'esecuzione
-  await page.locator('.chip', { hasText: 'E2' }).click();
+  await page.locator('.chip', { hasText: /^(✓ )?E2$/ }).click();
   await expect(page.locator('.traccia-id')).toHaveText('E2');
   await expect(page.locator('.messaggio-errore')).toContainText('Query interrotta', { timeout: 20_000 });
   await scriviQuery(page, 'SELECT COUNT(*) FROM Studente');

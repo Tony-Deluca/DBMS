@@ -1,8 +1,9 @@
 // Logica di esecuzione indipendente dall'ambiente: usata dal Web Worker nel
-// browser e direttamente dai test in Node.
-import type { Database, SqlJsStatic } from 'sql.js';
+// browser e direttamente dai test in Node. Il «database» è uno schema PostgreSQL dentro PGlite (vedi motore.ts).
 import { controllaQuery } from './guard';
 import { traduciErrore } from './errors';
+import { ErrorePostgres, type Db, type Motore } from './motore';
+import { tokenize } from './tokenize';
 import {
   confrontaRisultati,
   infoOrdine,
@@ -13,7 +14,7 @@ import {
   type Valore,
 } from './compare';
 import { colonneOrdinamento, haLimitEsterno, orderByEsterno, riscriviConChiavi } from './orderBy';
-import { VariantiDB } from './varianti';
+import { VariantiDB, leggiStruttura, violazioniChiaviEsterne, type Struttura } from './varianti';
 import type { ModelloLogico } from '../scenario/types';
 
 export class ErroreQuery extends Error {}
@@ -30,74 +31,66 @@ export interface ErroreStatement {
 }
 
 /**
- * Crea il database dagli statement. `byte` è il contenuto serializzato del database prima di renderlo
- * in sola lettura: serve per generare i database di prova.
+ * Crea il database dello scenario nello schema `schema` (ricreato vuoto) e ne legge la struttura.
+ * In caso di errore lo schema resta vuoto.
  */
-export function creaDatabase(SQL: SqlJsStatic, statements: string[]): { db: Database; errore?: ErroreStatement; byte?: Uint8Array } {
-  const db = new SQL.Database();
-  // Le FK non sono imposte durante il caricamento (l'ordine degli INSERT non conta);
-  // le violazioni vengono segnalate a parte da violazioniFK().
-  db.exec('BEGIN;');
-  for (let i = 0; i < statements.length; i++) {
-    try {
-      db.exec(statements[i]);
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK;');
-      } catch {
-        /* già annullata */
-      }
-      return { db, errore: { indice: i, messaggio: (e as Error).message } };
+export async function creaDatabase(
+  m: Motore,
+  schema: string,
+  statements: string[],
+  logico: ModelloLogico | null = null,
+): Promise<{ db: Db; errore?: ErroreStatement; struttura?: Struttura }> {
+  const db: Db = { m, schema };
+  await m.svuotaSchema(schema);
+  const e = await m.caricaStatements(schema, statements);
+  if (e) return { db, errore: { indice: e.indice, messaggio: e.errore.message } };
+  return { db, struttura: await leggiStruttura(db, logico) };
+}
+
+/** Righe che violano le chiavi esterne (dichiarate nei CREATE TABLE o nel modello logico). */
+export async function violazioniFK(db: Db, st: Struttura): Promise<{ tabella: string; riferita: string; quante: number }[]> {
+  const out: { tabella: string; riferita: string; quante: number }[] = [];
+  for (const f of st.fk) {
+    const quante = await violazioniChiaviEsterne(db, { tabelle: st.tabelle, fk: [f] });
+    if (quante > 0) {
+      const g = out.find((x) => x.tabella === f.tabella && x.riferita === f.rifTabella);
+      if (g) g.quante += quante;
+      else out.push({ tabella: f.tabella, riferita: f.rifTabella, quante });
     }
   }
-  db.exec('COMMIT;');
-  // export() chiude e riapre il database e azzera i PRAGMA: query_only si imposta dopo
-  const byte = db.export();
-  db.exec('PRAGMA query_only = ON;');
-  return { db, byte };
+  return out;
 }
 
-/** Righe che violano le chiavi esterne dichiarate nei CREATE TABLE. */
-export function violazioniFK(db: Database): { tabella: string; riferita: string; quante: number }[] {
-  const r = db.exec('PRAGMA foreign_key_check;');
-  const conta = new Map<string, number>();
-  for (const [tabella, , riferita] of r[0]?.values ?? []) {
-    const k = `${tabella}\u0001${riferita}`;
-    conta.set(k, (conta.get(k) ?? 0) + 1);
+/**
+ * PostgreSQL scrive in minuscolo i nomi non quotati (`AVG(Voto) AS Media` → «media»): si ripristina la forma
+ * scritta nella query quando compare tra le sue parole.
+ */
+export function nomiComeScritti(sql: string, colonne: string[]): string[] {
+  const scritte = new Map<string, string>();
+  for (const t of tokenize(sql).token) {
+    if (t.tipo !== 'parola') continue;
+    const k = t.testo.toLowerCase();
+    if (!scritte.has(k) && t.testo !== k) scritte.set(k, t.testo);
   }
-  return [...conta].map(([k, quante]) => {
-    const [tabella, riferita] = k.split('\u0001');
-    return { tabella, riferita, quante };
-  });
+  return colonne.map((c) => (c === c.toLowerCase() ? (scritte.get(c) ?? c) : c));
 }
 
-/** Esegue una query già controllata e restituisce tutte le righe. */
-function eseguiGrezza(db: Database, sql: string): Risultato {
-  const stmt = db.prepare(sql);
-  try {
-    const colonne = stmt.getColumnNames();
-    const righe: Valore[][] = [];
-    while (stmt.step()) righe.push(stmt.get() as Valore[]);
-    return { colonne, righe };
-  } finally {
-    stmt.free();
-  }
-}
-
-/** Controlla la query, la esegue e traduce gli errori. */
-export function esegui(db: Database, testo: string): Risultato {
+/** Controlla la query, la esegue (in sola lettura) e traduce gli errori. */
+export async function esegui(db: Db, testo: string): Promise<Risultato> {
   const g = controllaQuery(testo);
   if (!g.ok) throw new ErroreQuery(g.messaggio);
   try {
-    return eseguiGrezza(db, g.sql);
+    const r = await db.m.interroga(db.schema, g.sql);
+    return { colonne: nomiComeScritti(g.sql, r.colonne), righe: r.righe };
   } catch (e) {
-    throw new ErroreQuery(traduciErrore((e as Error).message));
+    if (e instanceof ErrorePostgres) throw new ErroreQuery(traduciErrore(e, g.sql));
+    throw new ErroreQuery(traduciErrore(new ErrorePostgres((e as Error).message ?? String(e)), g.sql));
   }
 }
 
-export function eseguiPerVista(db: Database, testo: string, maxRighe: number): RisultatoEsecuzione {
+export async function eseguiPerVista(db: Db, testo: string, maxRighe: number): Promise<RisultatoEsecuzione> {
   const t0 = performance.now();
-  const r = esegui(db, testo);
+  const r = await esegui(db, testo);
   const millisecondi = performance.now() - t0;
   return {
     colonne: r.colonne,
@@ -113,15 +106,15 @@ export function eseguiPerVista(db: Database, testo: string, maxRighe: number): R
  * ORDER BY, i gruppi di righe a pari chiave (le chiavi che non sono colonne del risultato si ricavano
  * riscrivendo la query con colonne aggiuntive).
  */
-export function riferimentoPer(db: Database, sql: string): Riferimento {
-  const ris = esegui(db, sql);
+export async function riferimentoPer(db: Db, sql: string): Promise<Riferimento> {
+  const ris = await esegui(db, sql);
   const voci = orderByEsterno(sql);
   let chiavi: Valore[][] | null = null;
   if (voci && voci.length > 0 && !colonneOrdinamento(voci, ris.colonne)) {
     const rw = riscriviConChiavi(sql, voci);
     if (rw) {
       try {
-        const r2 = esegui(db, rw.sql);
+        const r2 = await esegui(db, rw.sql);
         if (r2.righe.length === ris.righe.length && r2.colonne.length === ris.colonne.length + rw.chiavi) {
           chiavi = r2.righe.map((r) => r.slice(ris.colonne.length));
         }
@@ -138,22 +131,24 @@ export interface RispostaVerifica {
   risultato: RisultatoEsecuzione;
 }
 
-export function riferimentiUfficiali(db: Database, soluzioni: string[]): Riferimento[] {
-  return soluzioni.map((sql, i) => {
+export async function riferimentiUfficiali(db: Db, soluzioni: string[]): Promise<Riferimento[]> {
+  const out: Riferimento[] = [];
+  for (let i = 0; i < soluzioni.length; i++) {
     try {
-      return riferimentoPer(db, sql);
+      out.push(await riferimentoPer(db, soluzioni[i]));
     } catch (e) {
       throw new Error(`La soluzione ufficiale n. ${i + 1} non è eseguibile: ${(e as Error).message}`);
     }
-  });
+  }
+  return out;
 }
 
 /** Verifica sui soli dati originali (la verifica completa, con i database di prova, è in verificaRobusta.ts). */
-export function verifica(db: Database, testo: string, soluzioni: string[], maxRighe: number): RispostaVerifica {
+export async function verifica(db: Db, testo: string, soluzioni: string[], maxRighe: number): Promise<RispostaVerifica> {
   const t0 = performance.now();
-  const ottenuto = esegui(db, testo);
+  const ottenuto = await esegui(db, testo);
   const millisecondi = performance.now() - t0;
-  const ufficiali = riferimentiUfficiali(db, soluzioni);
+  const ufficiali = await riferimentiUfficiali(db, soluzioni);
   const esito = verificaControSoluzioni(ufficiali, ottenuto);
   return {
     esito,
@@ -167,14 +162,10 @@ export function verifica(db: Database, testo: string, soluzioni: string[], maxRi
   };
 }
 
-/** Tabelle e colonne effettivamente presenti nel database (per l'autocompletamento). */
-export function schemaReale(db: Database): Record<string, string[]> {
+/** Tabelle e colonne del database (per l'autocompletamento), con le maiuscole del modello logico. */
+export function schemaReale(st: Struttura): Record<string, string[]> {
   const out: Record<string, string[]> = {};
-  const t = db.exec("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name");
-  for (const [nome] of t[0]?.values ?? []) {
-    const info = db.exec(`PRAGMA table_info(${JSON.stringify(String(nome))})`);
-    out[String(nome)] = (info[0]?.values ?? []).map((r) => String(r[1]));
-  }
+  for (const t of st.tabelle) out[t.nome] = t.colonne.map((c) => c.nome);
   return out;
 }
 
@@ -184,55 +175,54 @@ export interface ProblemaSQL {
   messaggio: string;
 }
 
+const SCHEMA_PROVA = 'prova_scenario';
+
 /**
- * Prova lo scenario su un database temporaneo: statements, soluzioni,
+ * Prova lo scenario in uno schema temporaneo: statements, soluzioni,
  * risultati vuoti, alternative non equivalenti, tabelle del logico.
  */
-export function provaScenario(
-  SQL: SqlJsStatic,
+export async function provaScenario(
+  m: Motore,
   statements: string[],
   esercizi: { id: string; soluzioni: string[] }[],
   tabelleLogico: string[],
   logico: ModelloLogico | null = null,
-): ProblemaSQL[] {
+): Promise<ProblemaSQL[]> {
   const problemi: ProblemaSQL[] = [];
-  const { db, errore, byte } = creaDatabase(SQL, statements);
+  const { db, errore, struttura } = await creaDatabase(m, SCHEMA_PROVA, statements, logico);
   let varianti: VariantiDB | null = null;
   try {
-    if (errore) {
-      const anteprima = statements[errore.indice].trim().slice(0, 80).replace(/\s+/g, ' ');
+    if (errore || !struttura) {
+      const indice = errore?.indice ?? 0;
+      const anteprima = (statements[indice] ?? '').trim().slice(0, 80).replace(/\s+/g, ' ');
       problemi.push({
         livello: 'errore',
-        percorso: `database.statements[${errore.indice}]`,
-        messaggio: `l'istruzione non viene eseguita da SQLite: ${errore.messaggio} — «${anteprima}${anteprima.length >= 80 ? '…' : ''}»`,
+        percorso: `database.statements[${indice}]`,
+        messaggio: `l'istruzione non viene eseguita da PostgreSQL: ${errore?.messaggio ?? 'errore sconosciuto'} — «${anteprima}${anteprima.length >= 80 ? '…' : ''}»`,
       });
       return problemi;
     }
-    for (const v of violazioniFK(db)) {
+    for (const v of await violazioniFK(db, struttura)) {
       problemi.push({
         livello: 'avviso',
         percorso: 'database.statements',
         messaggio: `${v.quante} ${v.quante === 1 ? 'riga' : 'righe'} di «${v.tabella}» ${v.quante === 1 ? 'fa' : 'fanno'} riferimento a valori inesistenti in «${v.riferita}» (chiave esterna violata).`,
       });
     }
-    const reali = schemaReale(db);
-    const nomiReali = new Set(Object.keys(reali).map((n) => n.toLowerCase()));
+    const nomiReali = new Set(struttura.tabelle.map((t) => t.nome.toLowerCase()));
     tabelleLogico.forEach((nome, i) => {
       if (!nomiReali.has(nome.toLowerCase())) {
         problemi.push({ livello: 'avviso', percorso: `logico.tabelle[${i}].nome`, messaggio: `la tabella «${nome}» non esiste nel database creato dagli statements.` });
       }
     });
-    try {
-      varianti = byte ? new VariantiDB(SQL, byte, logico) : null;
-    } catch {
-      varianti = null; // le varianti sono un controllo in più: se non si riescono a creare si va avanti senza
-    }
-    esercizi.forEach((es, i) => {
+    varianti = new VariantiDB(db, struttura, `${SCHEMA_PROVA}_v`);
+    for (let i = 0; i < esercizi.length; i++) {
+      const es = esercizi[i];
       const riferimenti: { j: number; rif: Riferimento }[] = [];
-      es.soluzioni.forEach((sql, j) => {
+      for (let j = 0; j < es.soluzioni.length; j++) {
         const percorso = `esercizi[${i}].soluzioni[${j}]`;
         try {
-          const rif = riferimentoPer(db, sql);
+          const rif = await riferimentoPer(db, es.soluzioni[j]);
           if (rif.risultato.righe.length === 0) {
             problemi.push({ livello: 'avviso', percorso, messaggio: `la soluzione dell'esercizio «${es.id}» restituisce un risultato vuoto: la verifica sarebbe poco significativa.` });
           }
@@ -240,7 +230,7 @@ export function provaScenario(
         } catch (e) {
           problemi.push({ livello: 'errore', percorso, messaggio: `la soluzione dell'esercizio «${es.id}» non è eseguibile: ${(e as Error).message}` });
         }
-      });
+      }
       for (let a = 1; a < riferimenti.length; a++) {
         const { j, rif } = riferimenti[a];
         const percorso = `esercizi[${i}].soluzioni[${j}]`;
@@ -251,13 +241,13 @@ export function provaScenario(
           continue;
         }
         // equivalenza anche sui database di prova (non si controllano le soluzioni con LIMIT: dipendono dai pareggi)
-        if (!varianti || haLimitEsterno(base.sql) || haLimitEsterno(rif.sql)) continue;
-        for (const variante of varianti.tutte()) {
+        if (haLimitEsterno(base.sql) || haLimitEsterno(rif.sql)) continue;
+        for (const variante of await varianti.tutte()) {
           let rb: Riferimento;
           let ra: Riferimento;
           try {
-            rb = riferimentoPer(variante.db, base.sql);
-            ra = riferimentoPer(variante.db, rif.sql);
+            rb = await riferimentoPer(variante.db, base.sql);
+            ra = await riferimentoPer(variante.db, rif.sql);
           } catch {
             continue; // una delle due dà errore su questa variante: variante scartata
           }
@@ -271,10 +261,10 @@ export function provaScenario(
           }
         }
       }
-    });
+    }
   } finally {
-    varianti?.chiudi();
-    db.close();
+    await varianti?.chiudi();
+    await m.eliminaSchemi(SCHEMA_PROVA);
   }
   return problemi;
 }

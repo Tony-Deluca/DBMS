@@ -19,7 +19,7 @@ export function orderByEsterno(sql: string): VoceOrdinamento[] | null {
     if (t.profondita === 0 && t.upper === 'ORDER' && token[i + 1].upper === 'BY' && t.tipo === 'parola') idx = i;
   }
   if (idx < 0) return null;
-  // Un ORDER BY prima di UNION/EXCEPT/INTERSECT non è finale (SQLite lo vieta comunque).
+  // Un ORDER BY prima di UNION/EXCEPT/INTERSECT non è finale (PostgreSQL lo vieta comunque).
   for (let i = idx; i < token.length; i++) {
     const t = token[i];
     if (t.profondita === 0 && t.tipo === 'parola' && ['UNION', 'EXCEPT', 'INTERSECT'].includes(t.upper)) return null;

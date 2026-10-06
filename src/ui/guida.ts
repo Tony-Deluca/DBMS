@@ -42,13 +42,16 @@ export function apriGuida(): void {
     Confrontala sempre con le soluzioni ufficiali e chiediti se funzionerebbe con NULL, duplicati o tabelle vuote. Per questo gli scenari vanno generati con dati che contengono casi limite.</p>
   </section>
   <section class="sezione">
-    <h3>Note su SQLite</h3>
+    <h3>Note su PostgreSQL</h3>
     <ul>
-      <li>Sono permesse solo interrogazioni <code>SELECT</code> e <code>WITH</code>: il database non si può modificare. Ad ogni apertura dello scenario viene ricreato da zero.</li>
-      <li>Le stringhe vanno tra apici dritti <code>'…'</code>; la concatenazione è <code>||</code>. Le date sono testi nel formato <code>AAAA-MM-GG</code> (si confrontano come stringhe).</li>
-      <li>Supportati: JOIN (anche LEFT/RIGHT/FULL), sottoquery, EXISTS, UNION/INTERSECT/EXCEPT, CTE (WITH), funzioni finestra. Non c'è <code>TOP</code>: usa <code>LIMIT</code>.</li>
+      <li>Il motore è <strong>PostgreSQL</strong> (eseguito nel browser): si scrive SQL standard. Sono permesse solo interrogazioni <code>SELECT</code> e <code>WITH</code>: il database non si può modificare e viene ricreato ad ogni apertura dello scenario.</li>
+      <li>Confronti quantificati: <code>Voto &gt;= ALL (SELECT …)</code>, <code>Matricola = ANY (SELECT …)</code> (o <code>SOME</code>). Attenzione: <code>&gt; ALL</code> su una sottoquery vuota è vero, <code>= ANY</code> è falso, e un NULL nella sottoquery può rendere il confronto sconosciuto.</li>
+      <li>Le stringhe vanno tra apici dritti <code>'…'</code>; le virgolette <code>"…"</code> servono per i nomi. I nomi senza virgolette non distinguono maiuscole e minuscole. La concatenazione è <code>||</code>; <code>LIKE</code> distingue le maiuscole (<code>ILIKE</code> no).</li>
+      <li>Date di tipo <code>DATE</code>: <code>Data &gt;= '2024-01-01'</code>, <code>EXTRACT(YEAR FROM Data)</code>, <code>CURRENT_DATE</code>.</li>
+      <li>Con <code>GROUP BY</code>, ogni colonna del <code>SELECT</code> deve stare nel <code>GROUP BY</code> o in una funzione aggregata.</li>
+      <li>Supportati: JOIN (anche FULL OUTER), sottoquery, EXISTS, IN, ALL/ANY/SOME, UNION/INTERSECT/EXCEPT, CTE (WITH), funzioni finestra, <code>LIMIT</code> e <code>FETCH FIRST n ROWS ONLY</code>.</li>
       <li>La divisione tra interi è intera (<code>7/2 = 3</code>): usa <code>7.0/2</code> o <code>AVG</code> se ti serve il decimale.</li>
-      <li>Una query che dura più di 8 secondi viene interrotta (es. prodotto cartesiano enorme).</li>
+      <li>Una query che dura più di 8 secondi viene interrotta (es. prodotto cartesiano enorme) e il motore viene riavviato.</li>
     </ul>
   </section>
   <section class="sezione">
@@ -62,7 +65,7 @@ export function apriGuida(): void {
   </section>
   <section class="sezione">
     <h3>Dati e offline</h3>
-    <p>Tutto resta nel tuo browser (IndexedDB): nessun account, nessun server. Dopo il primo caricamento l'app funziona anche offline.
+    <p>Tutto resta nel tuo browser (IndexedDB): nessun account, nessun server. Il primo caricamento scarica anche il motore PostgreSQL (circa 8 MB, una volta sola); dopo l'app funziona anche offline.
     Su iPad aggiungila alla schermata Home (Condividi → Aggiungi alla schermata Home) ed esporta ogni tanto gli scenari e i progetti come backup.</p>
   </section>`;
   const html = import.meta.env.VITE_ARTIFACT

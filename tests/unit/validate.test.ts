@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { validaScenario, haErrori } from '../../src/scenario/validate';
 import { leggiJson, pulisciTesto } from '../../src/scenario/parseInput';
 import { provaScenario } from '../../src/sql/engine';
-import { leggiScenario, radice, sqlJs } from './helpers';
+import { leggiScenario, motoreTest, radice } from './helpers';
 
 const base = () => structuredClone(leggiScenario()) as unknown as Record<string, any>;
 const percorsi = (dati: unknown) => validaScenario(dati).filter((p) => p.livello === 'errore').map((p) => p.percorso);
@@ -62,10 +62,10 @@ describe('validazione dello scenario', () => {
   });
 
   it('prova SQL: statement errato, soluzione non eseguibile, risultato vuoto, alternative diverse', async () => {
-    const SQL = await sqlJs();
+    const SQL = await motoreTest();
     const statements = ['CREATE TABLE t(a INTEGER)', 'INSERT INTO t VALUES (1),(2)'];
-    expect(provaScenario(SQL, [...statements, 'INSERT INTO x VALUES (1)'], [], [])[0]).toMatchObject({ livello: 'errore', percorso: 'database.statements[2]' });
-    const p = provaScenario(SQL, statements, [
+    expect((await provaScenario(SQL, [...statements, 'INSERT INTO x VALUES (1)'], [], []))[0]).toMatchObject({ livello: 'errore', percorso: 'database.statements[2]' });
+    const p = await provaScenario(SQL, statements, [
       { id: 'A', soluzioni: ['SELECT b FROM t'] },
       { id: 'B', soluzioni: ['SELECT a FROM t WHERE a > 5'] },
       { id: 'C', soluzioni: ['SELECT a FROM t', 'SELECT a FROM t WHERE a = 1'] },
@@ -89,8 +89,7 @@ describe('validazione dello scenario', () => {
     const problemi = validaScenario(parse.valore);
     expect(problemi).toEqual([]);
     const s = parse.valore as any;
-    const SQL = await sqlJs();
-    expect(provaScenario(SQL, s.database.statements, s.esercizi, s.logico.tabelle.map((t: any) => t.nome))).toEqual([]);
+    expect(await provaScenario(await motoreTest(), s.database.statements, s.esercizi, s.logico.tabelle.map((t: any) => t.nome), s.logico)).toEqual([]);
     expect(haErrori(problemi)).toBe(false);
   });
 });
@@ -110,5 +109,13 @@ describe('lettura del JSON incollato', () => {
     const r3 = leggiJson('{ "a": “x” }');
     if (!r3.ok) expect(r3.messaggio).toMatch(/virgolette tipografiche/);
     expect(leggiJson('').ok).toBe(false);
+  });
+});
+
+describe('scenario generato seguendo PROMPT_GENERATORE.md (dialetto PostgreSQL)', () => {
+  it('si importa senza errori né avvisi: tipi DATE/BOOLEAN/NUMERIC, >= ALL, = ANY, EXCEPT, EXTRACT', async () => {
+    const s = leggiScenario('tests/fixtures/scenario-generato.json');
+    expect(validaScenario(structuredClone(s))).toEqual([]);
+    expect(await provaScenario(await motoreTest(), s.database.statements, s.esercizi, s.logico.tabelle.map((t) => t.nome), s.logico)).toEqual([]);
   });
 });

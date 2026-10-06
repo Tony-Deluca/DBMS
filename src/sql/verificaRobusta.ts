@@ -3,17 +3,17 @@
 // La risposta è corretta se coincide con UNA STESSA soluzione di riferimento sui dati originali e su tutte le
 // varianti utilizzabili (righe tolte, duplicate, valori NULL). Non è una prova formale di equivalenza ma un
 // controllo pratico che rende improbabili le coincidenze fortuite.
-import type { Database } from 'sql.js';
+import type { Db } from './motore';
 import { confrontaRisultati, verificaControSoluzioni, type Differenza, type EsitoVerifica, type Riferimento, type Risultato } from './compare';
 import { esegui, riferimentiUfficiali, riferimentoPer, type RispostaVerifica } from './engine';
 import { haLimitEsterno } from './orderBy';
 import type { VariantiDB, Variante } from './varianti';
 
-function riferimentoVariante(v: Variante, sql: string): Riferimento | null {
+async function riferimentoVariante(v: Variante, sql: string): Promise<Riferimento | null> {
   if (v.riferimenti.has(sql)) return v.riferimenti.get(sql)!;
   let r: Riferimento | null;
   try {
-    r = riferimentoPer(v.db, sql);
+    r = await riferimentoPer(v.db, sql);
   } catch {
     r = null; // la soluzione ufficiale dà errore su questa variante: la variante si scarta
   }
@@ -21,15 +21,15 @@ function riferimentoVariante(v: Variante, sql: string): Riferimento | null {
   return r;
 }
 
-export function verificaCompleta(
-  db: Database,
+export async function verificaCompleta(
+  db: Db,
   varianti: VariantiDB | null,
   testo: string,
   soluzioni: string[],
   maxRighe: number,
-): RispostaVerifica {
+): Promise<RispostaVerifica> {
   const t0 = performance.now();
-  const ottenuto = esegui(db, testo);
+  const ottenuto = await esegui(db, testo);
   const millisecondi = performance.now() - t0;
   const risultato = {
     colonne: ottenuto.colonne,
@@ -40,7 +40,7 @@ export function verificaCompleta(
   };
 
   // 1. dati originali
-  const rif0 = riferimentiUfficiali(db, soluzioni);
+  const rif0 = await riferimentiUfficiali(db, soluzioni);
   let candidati = rif0
     .map((r, i) => ({ i, esito: confrontaRisultati(r, ottenuto) }))
     .filter((c) => c.esito.uguale);
@@ -53,13 +53,14 @@ export function verificaCompleta(
   // 2. database di prova
   let verificate = 0;
   if (varianti) {
-    for (const v of varianti.tutte()) {
-      const rifs = soluzioni.map((s) => riferimentoVariante(v, s));
+    for (const v of await varianti.tutte()) {
+      const rifs: (Riferimento | null)[] = [];
+      for (const s of soluzioni) rifs.push(await riferimentoVariante(v, s));
       if (rifs.some((r) => r === null)) continue; // variante scartata
       let utenteV: Risultato | null = null;
       let erroreUtente = false;
       try {
-        utenteV = esegui(v.db, testo);
+        utenteV = await esegui(v.db, testo);
       } catch {
         erroreUtente = true;
       }

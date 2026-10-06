@@ -12,6 +12,20 @@ export async function caricaScenari(): Promise<void> {
   emetti('scenari');
 }
 
+/**
+ * Lo scenario d'esempio salvato con una versione precedente dell'app (es. quella con SQLite) viene
+ * sostituito da quello incluso, mantenendo nome e progressi.
+ */
+export async function aggiornaEsempio(): Promise<void> {
+  let cambiato = false;
+  for (const sc of stato.scenari) {
+    if (sc.origine !== 'esempio' || JSON.stringify(sc.dati) === JSON.stringify(esempio)) continue;
+    await archivio.salvaScenario({ ...sc, dati: structuredClone(esempio) as ScenarioSalvato['dati'] });
+    cambiato = true;
+  }
+  if (cambiato) await caricaScenari();
+}
+
 export async function assicuraEsempio(forza = false): Promise<ScenarioSalvato | undefined> {
   if (!forza && stato.scenari.length > 0) return undefined;
   const esito = await importaTesto(JSON.stringify(esempio), stato.scenari.map((s) => s.nome), 'esempio');

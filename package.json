@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "icone": "node scripts/genera-icone.mjs",
+    "datadir": "node scripts/crea-datadir.mjs",
     "build:artifact": "tsc --noEmit && vite build --config vite.artifact.config.ts && node scripts/crea-artifact.mjs"
   },
   "dependencies": {
@@ -23,14 +24,13 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@dagrejs/dagre": "^3.1.1",
+    "@electric-sql/pglite": "0.5.8",
     "@lezer/highlight": "^1.2.5",
-    "codemirror": "^6.0.2",
-    "sql.js": "^1.14.2"
+    "codemirror": "^6.0.2"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
     "@types/node": "^26.6.4",
-    "@types/sql.js": "^1.4.11",
     "typescript": "^7.0.2",
     "vite": "^8.3.2",
     "vite-plugin-pwa": "^2.0.0",

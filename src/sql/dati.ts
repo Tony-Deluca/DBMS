@@ -1,8 +1,9 @@
 // Consultazione dei dati del database dello scenario (sola lettura): elenco delle tabelle e pagine di righe
 // con filtro. Gli identificatori vengono sempre dal database stesso, mai dal testo digitato.
-import type { Database } from 'sql.js';
 import type { Valore } from './compare';
-import type { Struttura } from './varianti';
+import type { Db } from './motore';
+import { qi } from './motore';
+import { sqlT, tabellaDi, type Struttura } from './varianti';
 
 export interface RiferimentoFK {
   tabella: string;
@@ -47,77 +48,69 @@ export interface Pagina {
   totaleTabella: number;
 }
 
-const q = (n: string) => `"${n.replace(/"/g, '""')}"`;
-
-export function infoTabelle(db: Database, st: Struttura): TabellaInfo[] {
-  return st.tabelle.map((t) => ({
-    nome: t.nome,
-    righe: Number(db.exec(`SELECT COUNT(*) FROM ${q(t.nome)}`)[0].values[0][0]),
-    colonne: t.colonne.map((c) => ({
-      nome: c.nome,
-      tipo: c.tipo,
-      pk: c.pk > 0,
-      nullable: !c.notnull && c.pk === 0,
-      fk: st.fk
-        .filter((f) => f.tabella === t.nome && f.colonne.includes(c.nome))
-        .map((f) => ({ tabella: f.rifTabella, colonne: f.colonne, rifColonne: f.rifColonne })),
-    })),
-  }));
+async function conta(db: Db, sql: string, parametri: (string | number | null)[] = []): Promise<number> {
+  return Number((await db.m.interna(db.schema, sql, parametri)).righe[0][0]);
 }
 
-function haRowid(db: Database, tabella: string): boolean {
-  try {
-    db.exec(`SELECT rowid FROM ${q(tabella)} LIMIT 1`);
-    return true;
-  } catch {
-    return false;
+export async function infoTabelle(db: Db, st: Struttura): Promise<TabellaInfo[]> {
+  const out: TabellaInfo[] = [];
+  for (const t of st.tabelle) {
+    out.push({
+      nome: t.nome,
+      righe: await conta(db, `SELECT COUNT(*) FROM ${sqlT(t)}`),
+      colonne: t.colonne.map((c) => ({
+        nome: c.nome,
+        tipo: c.tipo,
+        pk: c.pk > 0,
+        nullable: !c.notnull && c.pk === 0,
+        fk: st.fk
+          .filter((f) => f.tabella === t.nome && f.colonne.includes(c.nome))
+          .map((f) => ({ tabella: f.rifTabella, colonne: f.colonne, rifColonne: f.rifColonne })),
+      })),
+    });
   }
+  return out;
 }
 
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-function eseguiConParametri(db: Database, sql: string, parametri: (string | number | Uint8Array | null)[]): Valore[][] {
-  const stmt = db.prepare(sql);
-  try {
-    stmt.bind(parametri);
-    const out: Valore[][] = [];
-    while (stmt.step()) out.push(stmt.get() as Valore[]);
-    return out;
-  } finally {
-    stmt.free();
-  }
-}
-
-export function paginaTabella(db: Database, st: Struttura, r: RichiestaPagina): Pagina {
-  const tab = st.tabelle.find((t) => t.nome === r.tabella);
+export async function paginaTabella(db: Db, st: Struttura, r: RichiestaPagina): Promise<Pagina> {
+  const tab = tabellaDi(st, r.tabella);
   if (!tab) throw new Error(`La tabella «${r.tabella}» non esiste.`);
   const nomi = tab.colonne.map((c) => c.nome);
-  const colonne = nomi.map(q);
+  const colonne = tab.colonne.map((c) => qi(c.reale));
 
   const condizioni: string[] = [];
-  const parametri: (string | number | Uint8Array | null)[] = [];
+  const parametri: (string | number | null)[] = [];
+  const segnaposto = (v: string | number | null) => {
+    parametri.push(v);
+    return `$${parametri.length}`;
+  };
   for (const u of r.uguali ?? []) {
-    if (!nomi.includes(u.colonna)) throw new Error(`La colonna «${u.colonna}» non esiste in «${tab.nome}».`);
-    condizioni.push(`${q(u.colonna)} IS ?`);
-    parametri.push(u.valore);
+    const i = nomi.indexOf(u.colonna);
+    if (i < 0) throw new Error(`La colonna «${u.colonna}» non esiste in «${tab.nome}».`);
+    const v = u.valore instanceof Uint8Array ? null : u.valore;
+    // il tipo del parametro lo deduce PostgreSQL dalla colonna (numeri, date come testo, 'true'/'false')
+    condizioni.push(v === null ? `${colonne[i]} IS NULL` : `${colonne[i]} = ${segnaposto(v)}`);
   }
   const testo = (r.testo ?? '').trim();
   if (testo) {
-    const alternative = colonne.map((c) => `CAST(${c} AS TEXT) LIKE ? ESCAPE '\\'`);
-    for (let i = 0; i < colonne.length; i++) parametri.push(`%${escapeLike(testo)}%`);
+    const p = segnaposto(`%${escapeLike(testo)}%`);
+    const alternative = colonne.map((c) => `CAST(${c} AS TEXT) ILIKE ${p}`);
     // la ricerca «null» trova anche i valori NULL
     const nulli = testo.toLowerCase() === 'null' ? ` OR ${colonne.map((c) => `${c} IS NULL`).join(' OR ')}` : '';
     condizioni.push(`(${alternative.join(' OR ')}${nulli})`);
   }
   const dove = condizioni.length ? ` WHERE ${condizioni.join(' AND ')}` : '';
-  const ordine = haRowid(db, tab.nome) ? ' ORDER BY rowid' : tab.pk.length ? ` ORDER BY ${tab.pk.map(q).join(', ')}` : '';
+  const pk = tab.colonne.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk);
+  const ordine = pk.length ? ` ORDER BY ${pk.map((c) => qi(c.reale)).join(', ')}` : ' ORDER BY ctid';
 
-  const totaleTabella = Number(db.exec(`SELECT COUNT(*) FROM ${q(tab.nome)}`)[0].values[0][0]);
-  const totale = condizioni.length ? Number(eseguiConParametri(db, `SELECT COUNT(*) FROM ${q(tab.nome)}${dove}`, parametri)[0][0]) : totaleTabella;
+  const totaleTabella = await conta(db, `SELECT COUNT(*) FROM ${sqlT(tab)}`);
+  const totale = condizioni.length ? await conta(db, `SELECT COUNT(*) FROM ${sqlT(tab)}${dove}`, parametri) : totaleTabella;
   const limite = Math.max(1, Math.min(500, Math.floor(r.limite)));
   const offset = Math.max(0, Math.floor(r.offset));
-  const righe = eseguiConParametri(db, `SELECT ${colonne.join(', ')} FROM ${q(tab.nome)}${dove}${ordine} LIMIT ${limite} OFFSET ${offset}`, parametri);
+  const righe = (await db.m.interna(db.schema, `SELECT ${colonne.join(', ')} FROM ${sqlT(tab)}${dove}${ordine} LIMIT ${limite} OFFSET ${offset}`, parametri)).righe;
   return { colonne: nomi, righe, totale, totaleTabella };
 }

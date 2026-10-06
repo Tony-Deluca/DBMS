@@ -1,0 +1,279 @@
+{
+  "version": 1,
+  "metadati": {
+    "titolo": "Hotel (generato col prompt)",
+    "descrizione": "Clienti omonimi (Rossi), una città NULL, un tipo di camera mai prenotato (Tripla), un cliente senza prenotazioni (Neri), pareggi sulle notti.",
+    "dominio": "Hotel",
+    "autore": "Claude"
+  },
+  "er": {
+    "entita": [
+      {
+        "nome": "CLIENTE",
+        "attributi": [
+          {
+            "nome": "Codice",
+            "chiave": true
+          },
+          {
+            "nome": "Nome"
+          },
+          {
+            "nome": "Citta",
+            "cardinalita": "(0,1)"
+          },
+          {
+            "nome": "Fedelta"
+          }
+        ]
+      },
+      {
+        "nome": "CAMERA",
+        "attributi": [
+          {
+            "nome": "Numero",
+            "chiave": true
+          },
+          {
+            "nome": "Piano"
+          }
+        ]
+      },
+      {
+        "nome": "TIPO_CAMERA",
+        "attributi": [
+          {
+            "nome": "Codice",
+            "chiave": true
+          },
+          {
+            "nome": "Descrizione"
+          },
+          {
+            "nome": "Prezzo"
+          }
+        ]
+      }
+    ],
+    "relazioni": [
+      {
+        "nome": "PRENOTAZIONE",
+        "partecipanti": [
+          {
+            "entita": "CLIENTE",
+            "cardinalita": "(0,N)"
+          },
+          {
+            "entita": "CAMERA",
+            "cardinalita": "(0,N)"
+          }
+        ],
+        "attributi": [
+          {
+            "nome": "Arrivo"
+          },
+          {
+            "nome": "Notti"
+          }
+        ]
+      },
+      {
+        "nome": "TIPOLOGIA",
+        "partecipanti": [
+          {
+            "entita": "CAMERA",
+            "cardinalita": "(1,1)"
+          },
+          {
+            "entita": "TIPO_CAMERA",
+            "cardinalita": "(0,N)"
+          }
+        ]
+      }
+    ]
+  },
+  "logico": {
+    "tabelle": [
+      {
+        "nome": "TipoCamera",
+        "colonne": [
+          {
+            "nome": "Codice",
+            "tipo": "VARCHAR(10)"
+          },
+          {
+            "nome": "Descrizione",
+            "tipo": "VARCHAR(50)"
+          },
+          {
+            "nome": "Prezzo",
+            "tipo": "NUMERIC(6,2)"
+          }
+        ],
+        "chiavePrimaria": [
+          "Codice"
+        ]
+      },
+      {
+        "nome": "Camera",
+        "colonne": [
+          {
+            "nome": "Numero",
+            "tipo": "INTEGER"
+          },
+          {
+            "nome": "Piano",
+            "tipo": "INTEGER"
+          },
+          {
+            "nome": "Tipo",
+            "tipo": "VARCHAR(10)"
+          }
+        ],
+        "chiavePrimaria": [
+          "Numero"
+        ],
+        "chiaviEsterne": [
+          {
+            "colonne": [
+              "Tipo"
+            ],
+            "tabella": "TipoCamera",
+            "riferimenti": [
+              "Codice"
+            ]
+          }
+        ]
+      },
+      {
+        "nome": "Cliente",
+        "colonne": [
+          {
+            "nome": "Codice",
+            "tipo": "INTEGER"
+          },
+          {
+            "nome": "Nome",
+            "tipo": "VARCHAR(50)"
+          },
+          {
+            "nome": "Citta",
+            "tipo": "VARCHAR(50)",
+            "nullable": true
+          },
+          {
+            "nome": "Fedelta",
+            "tipo": "BOOLEAN"
+          }
+        ],
+        "chiavePrimaria": [
+          "Codice"
+        ]
+      },
+      {
+        "nome": "Prenotazione",
+        "colonne": [
+          {
+            "nome": "Cliente",
+            "tipo": "INTEGER"
+          },
+          {
+            "nome": "Camera",
+            "tipo": "INTEGER"
+          },
+          {
+            "nome": "Arrivo",
+            "tipo": "DATE"
+          },
+          {
+            "nome": "Notti",
+            "tipo": "INTEGER"
+          }
+        ],
+        "chiavePrimaria": [
+          "Cliente",
+          "Camera",
+          "Arrivo"
+        ],
+        "chiaviEsterne": [
+          {
+            "colonne": [
+              "Cliente"
+            ],
+            "tabella": "Cliente",
+            "riferimenti": [
+              "Codice"
+            ]
+          },
+          {
+            "colonne": [
+              "Camera"
+            ],
+            "tabella": "Camera",
+            "riferimenti": [
+              "Numero"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "database": {
+    "statements": [
+      "CREATE TABLE TipoCamera (Codice VARCHAR(10) PRIMARY KEY, Descrizione VARCHAR(50) NOT NULL, Prezzo NUMERIC(6,2) NOT NULL CHECK (Prezzo > 0));",
+      "CREATE TABLE Camera (Numero INTEGER PRIMARY KEY, Piano INTEGER NOT NULL, Tipo VARCHAR(10) NOT NULL REFERENCES TipoCamera(Codice));",
+      "CREATE TABLE Cliente (Codice INTEGER PRIMARY KEY, Nome VARCHAR(50) NOT NULL, Citta VARCHAR(50), Fedelta BOOLEAN NOT NULL DEFAULT FALSE);",
+      "CREATE TABLE Prenotazione (Cliente INTEGER NOT NULL REFERENCES Cliente(Codice), Camera INTEGER NOT NULL REFERENCES Camera(Numero), Arrivo DATE NOT NULL, Notti INTEGER NOT NULL CHECK (Notti > 0), PRIMARY KEY (Cliente, Camera, Arrivo));",
+      "INSERT INTO TipoCamera (Codice, Descrizione, Prezzo) VALUES ('SGL', 'Singola', 60.00), ('DBL', 'Doppia', 95.50), ('SUI', 'Suite', 210.00), ('TRP', 'Tripla', 120.00);",
+      "INSERT INTO Camera (Numero, Piano, Tipo) VALUES (101, 1, 'SGL'), (102, 1, 'DBL'), (201, 2, 'DBL'), (202, 2, 'SUI'), (301, 3, 'SGL'), (302, 3, 'DBL');",
+      "INSERT INTO Cliente (Codice, Nome, Citta, Fedelta) VALUES (1, 'Rossi', 'Bari', TRUE), (2, 'Bianchi', NULL, FALSE), (3, 'Verdi', 'Lecce', FALSE), (4, 'Rossi', 'Taranto', TRUE), (5, 'Neri', 'Bari', FALSE);",
+      "INSERT INTO Prenotazione (Cliente, Camera, Arrivo, Notti) VALUES (1, 101, '2025-01-10', 2), (1, 202, '2025-03-01', 3), (1, 102, '2025-05-20', 1), (2, 102, '2025-02-14', 2), (2, 201, '2025-04-01', 5), (3, 301, '2025-01-15', 2), (4, 202, '2025-06-01', 3), (4, 101, '2025-07-10', 3), (4, 302, '2025-08-01', 2), (1, 101, '2025-09-09', 2);"
+    ]
+  },
+  "esercizi": [
+    {
+      "id": "E1",
+      "titolo": "Prenotazioni del 2025 di inizio anno",
+      "difficolta": 1,
+      "argomento": "Selezione e ordinamento",
+      "traccia": "Trovare le prenotazioni con arrivo nel primo trimestre del 2025, dalla più recente.\nRestituire: cliente, camera, arrivo.",
+      "soluzioni": [
+        "SELECT Cliente, Camera, Arrivo FROM Prenotazione WHERE Arrivo BETWEEN '2025-01-01' AND '2025-03-31' ORDER BY Arrivo DESC;",
+        "SELECT Cliente, Camera, Arrivo FROM Prenotazione WHERE EXTRACT(YEAR FROM Arrivo) = 2025 AND EXTRACT(MONTH FROM Arrivo) <= 3 ORDER BY Arrivo DESC;"
+      ]
+    },
+    {
+      "id": "E2",
+      "titolo": "Clienti in suite",
+      "difficolta": 2,
+      "argomento": "Join",
+      "traccia": "Trovare i clienti che hanno prenotato almeno una suite.\nRestituire: codice e nome del cliente.",
+      "soluzioni": [
+        "SELECT DISTINCT c.Codice, c.Nome FROM Cliente c JOIN Prenotazione p ON p.Cliente = c.Codice JOIN Camera m ON m.Numero = p.Camera WHERE m.Tipo = 'SUI';",
+        "SELECT c.Codice, c.Nome FROM Cliente c WHERE c.Codice = ANY (SELECT p.Cliente FROM Prenotazione p JOIN Camera m ON m.Numero = p.Camera WHERE m.Tipo = 'SUI');"
+      ]
+    },
+    {
+      "id": "E3",
+      "titolo": "Il soggiorno più lungo",
+      "difficolta": 3,
+      "argomento": "Confronti quantificati (ALL)",
+      "traccia": "Trovare il cliente (o i clienti a pari merito) con il maggior numero totale di notti prenotate.\nRestituire: codice del cliente e totale delle notti.",
+      "soluzioni": [
+        "SELECT Cliente, SUM(Notti) FROM Prenotazione GROUP BY Cliente HAVING SUM(Notti) >= ALL (SELECT SUM(Notti) FROM Prenotazione GROUP BY Cliente);",
+        "SELECT Cliente, SUM(Notti) FROM Prenotazione GROUP BY Cliente HAVING SUM(Notti) = (SELECT MAX(t.Tot) FROM (SELECT SUM(Notti) AS Tot FROM Prenotazione GROUP BY Cliente) t);"
+      ]
+    },
+    {
+      "id": "E4",
+      "titolo": "Tipi mai prenotati",
+      "difficolta": 3,
+      "argomento": "Anti-join",
+      "traccia": "Trovare i tipi di camera che non sono mai stati prenotati.\nRestituire: codice e descrizione.",
+      "soluzioni": [
+        "SELECT t.Codice, t.Descrizione FROM TipoCamera t WHERE NOT EXISTS (SELECT * FROM Prenotazione p JOIN Camera m ON m.Numero = p.Camera WHERE m.Tipo = t.Codice);",
+        "SELECT Codice, Descrizione FROM TipoCamera EXCEPT SELECT DISTINCT t.Codice, t.Descrizione FROM TipoCamera t JOIN Camera m ON m.Tipo = t.Codice JOIN Prenotazione p ON p.Camera = m.Numero;"
+      ]
+    }
+  ]
+}

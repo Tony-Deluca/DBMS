@@ -4,17 +4,22 @@ export type EsitoGuardia = { ok: true; sql: string } | { ok: false; messaggio: s
 
 // Istruzioni che modificano il database o la connessione.
 const VIETATE = new Set([
-  'INSERT', 'UPDATE', 'DELETE', 'REPLACE', 'CREATE', 'DROP', 'ALTER', 'ATTACH', 'DETACH',
-  'PRAGMA', 'VACUUM', 'REINDEX', 'ANALYZE', 'BEGIN', 'END', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'RELEASE',
+  'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'REPLACE', 'CREATE', 'DROP', 'ALTER', 'TRUNCATE', 'COPY', 'GRANT', 'REVOKE',
+  'VACUUM', 'REINDEX', 'ANALYZE', 'CLUSTER', 'REFRESH', 'COMMENT', 'SECURITY', 'IMPORT', 'LOAD', 'LOCK', 'CHECKPOINT',
+  'BEGIN', 'START', 'END', 'COMMIT', 'ROLLBACK', 'ABORT', 'SAVEPOINT', 'RELEASE', 'PREPARE', 'EXECUTE', 'DEALLOCATE',
+  'SET', 'RESET', 'SHOW', 'DISCARD', 'DO', 'CALL', 'LISTEN', 'NOTIFY', 'UNLISTEN', 'EXPLAIN', 'DECLARE', 'FETCH', 'MOVE', 'CLOSE',
+  'PRAGMA', 'ATTACH', 'DETACH',
 ]);
+/** Istruzioni che modificano i dati, vietate anche dentro una CTE (WITH x AS (DELETE … RETURNING …)). */
+const MODIFICHE = new Set(['INSERT', 'UPDATE', 'DELETE', 'MERGE', 'TRUNCATE']);
 
 const SPIEGAZIONE =
   'Sono consentite solo interrogazioni che iniziano con SELECT o WITH: i dati dello scenario non si possono modificare.';
 
 /**
  * Controlla che il testo sia UNA sola interrogazione SELECT/WITH.
- * Restituisce il testo pulito (senza ';' finali). Il database ha comunque
- * PRAGMA query_only attivo come seconda difesa.
+ * Restituisce il testo pulito (senza ';' finali). Come seconda difesa la query gira comunque in una
+ * transazione READ ONLY che viene sempre annullata.
  */
 export function controllaQuery(testo: string): EsitoGuardia {
   const sql = testo.trim();
@@ -47,8 +52,21 @@ export function controllaQuery(testo: string): EsitoGuardia {
     return { ok: false, messaggio: `La query inizia con «${parola}». ${SPIEGAZIONE}` };
   }
 
+  // istruzioni di modifica dentro parentesi (CTE con DELETE … RETURNING) e SELECT … INTO (crea una tabella)
+  for (let i = 1; i < utili.length; i++) {
+    const t = utili[i];
+    if (t.tipo !== 'parola') continue;
+    const prec = utili[i - 1];
+    if (MODIFICHE.has(t.upper) && prec.tipo === 'simbolo' && prec.testo === '(') {
+      return { ok: false, messaggio: `${t.upper} non è consentito, nemmeno dentro una CTE. ${SPIEGAZIONE}` };
+    }
+    if (t.upper === 'INTO' && t.profondita === 0) {
+      return { ok: false, messaggio: `SELECT … INTO non è consentito: creerebbe una nuova tabella. ${SPIEGAZIONE}` };
+    }
+  }
+
   if (prima.upper === 'WITH') {
-    // Dopo le CTE (… AS (…)) deve arrivare una SELECT: SQLite ammette anche WITH … DELETE/INSERT/UPDATE.
+    // Dopo le CTE (… AS (…)) deve arrivare una SELECT: PostgreSQL ammette anche WITH … DELETE/INSERT/UPDATE.
     for (let i = 1; i < utili.length; i++) {
       const t = utili[i];
       if (!(t.tipo === 'simbolo' && t.testo === ')' && t.profondita === 0)) continue;

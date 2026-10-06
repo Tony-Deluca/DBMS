@@ -1,10 +1,11 @@
 # Genera scenari-esempio/universita.json (lo scenario di esempio incluso nell'app).
-# Tenuto come script per poter rigenerare il file in modo leggibile.
+# Tenuto come script per poter rigenerare il file in modo leggibile. Dialetto: PostgreSQL.
 import json, pathlib
 
 def ins(tabella, colonne, righe):
     def lit(v):
         if v is None: return 'NULL'
+        if isinstance(v, bool): return 'TRUE' if v else 'FALSE'
         if isinstance(v, (int, float)): return str(v)
         return "'" + str(v).replace("'", "''") + "'"
     vals = ',\n  '.join('(' + ', '.join(lit(x) for x in r) + ')' for r in righe)
@@ -22,7 +23,7 @@ create = [
   Cognome           TEXT NOT NULL,
   Email             TEXT,
   Ruolo             TEXT NOT NULL CHECK (Ruolo IN ('Ordinario', 'Associato', 'Ricercatore')),
-  ScadenzaContratto TEXT,
+  ScadenzaContratto DATE,
   Dipartimento      TEXT REFERENCES Dipartimento(Codice)
 );""",
 """CREATE TABLE CorsoDiLaurea (
@@ -35,7 +36,7 @@ create = [
   Matricola      INTEGER PRIMARY KEY,
   Nome           TEXT NOT NULL,
   Cognome        TEXT NOT NULL,
-  DataNascita    TEXT NOT NULL,
+  DataNascita    DATE NOT NULL,
   Citta          TEXT NOT NULL,
   AnnoIscrizione INTEGER NOT NULL,
   Email          TEXT,
@@ -52,9 +53,9 @@ create = [
 """CREATE TABLE Esame (
   Studente INTEGER NOT NULL REFERENCES Studente(Matricola),
   Corso    TEXT    NOT NULL REFERENCES Corso(Codice),
-  Data     TEXT    NOT NULL,
+  Data     DATE    NOT NULL,
   Voto     INTEGER NOT NULL CHECK (Voto BETWEEN 18 AND 30),
-  Lode     INTEGER NOT NULL DEFAULT 0 CHECK (Lode IN (0, 1) AND (Lode = 0 OR Voto = 30)),
+  Lode     BOOLEAN NOT NULL DEFAULT FALSE CHECK (NOT Lode OR Voto = 30),
   PRIMARY KEY (Studente, Corso)
 );""",
 """CREATE TABLE Propedeuticita (
@@ -122,6 +123,7 @@ esa = [(100001, 'INF01', '2024-01-20', 28, 0), (100001, 'INF02', '2024-02-10', 3
        (100012, 'MAT01', '2024-02-06', 30, 0),
        (100014, 'INF01', '2022-01-25', 26, 0), (100014, 'INF02', '2022-02-14', 27, 0), (100014, 'INF03', '2022-06-20', 27, 0),
        (100014, 'INF04', '2023-01-27', 27, 0), (100014, 'INF05', '2023-06-30', 28, 0), (100014, 'INF06', '2024-01-29', 30, 0)]
+esa = [(a, b, c, d, bool(l)) for (a, b, c, d, l) in esa]
 prop = [('INF04', 'INF02'), ('INF04', 'INF03'), ('INF05', 'INF02'), ('INF06', 'INF05'), ('MAT02', 'MAT01'), ('GES03', 'GES01')]
 
 statements = create + [
@@ -181,15 +183,15 @@ scenario = {
   'logico': {
     'tabelle': [
       {'nome': 'Dipartimento', 'colonne': [C('Codice', 'TEXT'), C('Nome', 'TEXT'), C('Sede', 'TEXT', True)], 'chiavePrimaria': ['Codice']},
-      {'nome': 'Docente', 'colonne': [C('Matricola', 'TEXT'), C('Nome', 'TEXT'), C('Cognome', 'TEXT'), C('Email', 'TEXT', True), C('Ruolo', 'TEXT'), C('ScadenzaContratto', 'TEXT', True), C('Dipartimento', 'TEXT', True)],
+      {'nome': 'Docente', 'colonne': [C('Matricola', 'TEXT'), C('Nome', 'TEXT'), C('Cognome', 'TEXT'), C('Email', 'TEXT', True), C('Ruolo', 'TEXT'), C('ScadenzaContratto', 'DATE', True), C('Dipartimento', 'TEXT', True)],
        'chiavePrimaria': ['Matricola'], 'chiaviEsterne': [{'colonne': ['Dipartimento'], 'tabella': 'Dipartimento', 'riferimenti': ['Codice']}]},
       {'nome': 'CorsoDiLaurea', 'colonne': [C('Codice', 'TEXT'), C('Nome', 'TEXT'), C('Livello', 'TEXT'), C('Dipartimento', 'TEXT')],
        'chiavePrimaria': ['Codice'], 'chiaviEsterne': [{'colonne': ['Dipartimento'], 'tabella': 'Dipartimento', 'riferimenti': ['Codice']}]},
-      {'nome': 'Studente', 'colonne': [C('Matricola', 'INTEGER'), C('Nome', 'TEXT'), C('Cognome', 'TEXT'), C('DataNascita', 'TEXT'), C('Citta', 'TEXT'), C('AnnoIscrizione', 'INTEGER'), C('Email', 'TEXT', True), C('CorsoDiLaurea', 'TEXT')],
+      {'nome': 'Studente', 'colonne': [C('Matricola', 'INTEGER'), C('Nome', 'TEXT'), C('Cognome', 'TEXT'), C('DataNascita', 'DATE'), C('Citta', 'TEXT'), C('AnnoIscrizione', 'INTEGER'), C('Email', 'TEXT', True), C('CorsoDiLaurea', 'TEXT')],
        'chiavePrimaria': ['Matricola'], 'chiaviEsterne': [{'colonne': ['CorsoDiLaurea'], 'tabella': 'CorsoDiLaurea', 'riferimenti': ['Codice']}]},
       {'nome': 'Corso', 'colonne': [C('Codice', 'TEXT'), C('Nome', 'TEXT'), C('CFU', 'INTEGER'), C('Anno', 'INTEGER'), C('Docente', 'TEXT', True), C('CorsoDiLaurea', 'TEXT')],
        'chiavePrimaria': ['Codice'], 'chiaviEsterne': [{'colonne': ['Docente'], 'tabella': 'Docente', 'riferimenti': ['Matricola']}, {'colonne': ['CorsoDiLaurea'], 'tabella': 'CorsoDiLaurea', 'riferimenti': ['Codice']}]},
-      {'nome': 'Esame', 'colonne': [C('Studente', 'INTEGER'), C('Corso', 'TEXT'), C('Data', 'TEXT'), C('Voto', 'INTEGER'), C('Lode', 'INTEGER')],
+      {'nome': 'Esame', 'colonne': [C('Studente', 'INTEGER'), C('Corso', 'TEXT'), C('Data', 'DATE'), C('Voto', 'INTEGER'), C('Lode', 'BOOLEAN')],
        'chiavePrimaria': ['Studente', 'Corso'], 'chiaviEsterne': [{'colonne': ['Studente'], 'tabella': 'Studente', 'riferimenti': ['Matricola']}, {'colonne': ['Corso'], 'tabella': 'Corso', 'riferimenti': ['Codice']}]},
       {'nome': 'Propedeuticita', 'colonne': [C('Corso', 'TEXT'), C('Propedeutico', 'TEXT')],
        'chiavePrimaria': ['Corso', 'Propedeutico'], 'chiaviEsterne': [{'colonne': ['Corso'], 'tabella': 'Corso', 'riferimenti': ['Codice']}, {'colonne': ['Propedeutico'], 'tabella': 'Corso', 'riferimenti': ['Codice']}]},
@@ -212,7 +214,7 @@ scenario = {
      'soluzioni': [
        "SELECT DISTINCT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\n  JOIN Esame e ON e.Studente = s.Matricola\n  JOIN Corso c ON c.Codice = e.Corso\nWHERE e.Voto = 30 AND c.Anno = 1;",
        "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE s.Matricola IN (\n  SELECT e.Studente\n  FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Voto = 30 AND c.Anno = 1\n);",
-       "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE EXISTS (\n  SELECT *\n  FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Studente = s.Matricola AND e.Voto = 30 AND c.Anno = 1\n);"],
+       "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE s.Matricola = ANY (\n  SELECT e.Studente\n  FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Voto = 30 AND c.Anno = 1\n);"],
      'suggerimento': "Uno studente può avere più di un 30: come eviti i duplicati? Attenzione anche agli studenti omonimi."},
     {'id': 'E4', 'titolo': 'Statistiche per corso', 'difficolta': 3, 'argomento': 'GROUP BY e outer join',
      'traccia': "Per ogni corso mostra codice, nome, numero di esami superati e voto medio. Devono comparire anche i corsi senza esami, con 0 esami e voto medio NULL.",
@@ -245,6 +247,18 @@ scenario = {
        "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE NOT EXISTS (\n  SELECT * FROM Corso c\n  WHERE c.CorsoDiLaurea = s.CorsoDiLaurea AND c.Anno = 1\n    AND NOT EXISTS (\n      SELECT * FROM Esame e\n      WHERE e.Studente = s.Matricola AND e.Corso = c.Codice\n    )\n);",
        "SELECT s.Matricola, s.Cognome, s.Nome\nFROM Studente s\nWHERE (\n  SELECT COUNT(*) FROM Corso c\n  WHERE c.CorsoDiLaurea = s.CorsoDiLaurea AND c.Anno = 1\n) = (\n  SELECT COUNT(*) FROM Esame e JOIN Corso c ON c.Codice = e.Corso\n  WHERE e.Studente = s.Matricola AND c.CorsoDiLaurea = s.CorsoDiLaurea AND c.Anno = 1\n);"],
      'suggerimento': "Divisione: «non esiste un corso del primo anno del suo CdL che lo studente non abbia superato». In alternativa confronta due conteggi."},
+    {'id': 'E9', 'titolo': 'La media più alta', 'difficolta': 5, 'argomento': 'Confronti quantificati (ALL)',
+     'traccia': "Trova matricola, cognome e media dei voti dello studente (o degli studenti, a pari merito) con la media più alta. Considera solo gli studenti che hanno superato almeno un esame.",
+     'soluzioni': [
+       "SELECT s.Matricola, s.Cognome, AVG(e.Voto) AS Media\nFROM Studente s\n  JOIN Esame e ON e.Studente = s.Matricola\nGROUP BY s.Matricola, s.Cognome\nHAVING AVG(e.Voto) >= ALL (\n  SELECT AVG(Voto) FROM Esame GROUP BY Studente\n);",
+       "SELECT s.Matricola, s.Cognome, AVG(e.Voto) AS Media\nFROM Studente s\n  JOIN Esame e ON e.Studente = s.Matricola\nGROUP BY s.Matricola, s.Cognome\nHAVING AVG(e.Voto) = (\n  SELECT MAX(m.Media)\n  FROM (SELECT AVG(Voto) AS Media FROM Esame GROUP BY Studente) m\n);"],
+     'suggerimento': "Il massimo di una media: confronta la media di ogni studente con TUTTE le medie (>= ALL), oppure con la massima ottenuta da una sottoquery nel FROM."},
+    {'id': 'E10', 'titolo': 'Più CFU di tutti', 'difficolta': 5, 'argomento': 'Confronti quantificati e insiemi vuoti',
+     'traccia': "Trova codice, nome e CFU dei corsi che valgono più CFU di ciascuno dei corsi del secondo anno. Se non ci fossero corsi del secondo anno, la condizione sarebbe vera per tutti i corsi.",
+     'soluzioni': [
+       "SELECT c.Codice, c.Nome, c.CFU\nFROM Corso c\nWHERE c.CFU > ALL (\n  SELECT CFU FROM Corso WHERE Anno = 2\n);",
+       "SELECT c.Codice, c.Nome, c.CFU\nFROM Corso c\nWHERE NOT EXISTS (\n  SELECT * FROM Corso c2\n  WHERE c2.Anno = 2 AND c2.CFU >= c.CFU\n);"],
+     'suggerimento': "x > ALL (sottoquery) è vero quando la sottoquery è vuota; x > (SELECT MAX(…)) invece no, perché il massimo di un insieme vuoto è NULL."},
   ],
 }
 

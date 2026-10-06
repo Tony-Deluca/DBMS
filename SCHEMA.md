@@ -23,7 +23,7 @@ rendono la verifica meno affidabile.
   "metadati":  { … },   titolo, descrizione…
   "er":        { … },   entità, relazioni, generalizzazioni
   "logico":    { … },   tabelle, colonne, chiavi primarie ed esterne
-  "database":  { … },   statement SQLite (CREATE TABLE, INSERT)
+  "database":  { … },   statement PostgreSQL (CREATE TABLE, INSERT)
   "esercizi":  [ … ]    tracce e soluzioni
 }
 ```
@@ -102,7 +102,7 @@ e che non sia figlia di una generalizzazione) genera un avviso.
 | `chiaviEsterne` | array | no | `{ "colonne": ["Studente"], "tabella": "Studente", "riferimenti": ["Matricola"] }` |
 | `unici` | array di array | no | Altri vincoli UNIQUE, es. `[["Email"]]`. |
 
-- `tipo` è testo libero (si consigliano i tipi SQLite: `INTEGER`, `REAL`, `TEXT`).
+- `tipo` è testo libero (si consigliano i tipi PostgreSQL: `INTEGER`, `NUMERIC(p,s)`, `VARCHAR(n)`, `TEXT`, `DATE`, `BOOLEAN`).
 - `nullable: true` viene mostrato con il simbolo ∅ (ammette NULL).
 - Ogni colonna citata in chiavi e vincoli deve esistere; ogni chiave esterna
   deve puntare a una tabella e a colonne esistenti, con lo stesso numero di colonne.
@@ -111,14 +111,23 @@ e che non sia figlia di una generalizzazione) genera un avviso.
 
 | Campo | Tipo | Obbl. | Descrizione |
 |---|---|---|---|
-| `statements` | array di stringhe | sì | Istruzioni SQLite eseguite in ordine, **una per elemento**: prima i `CREATE TABLE`, poi gli `INSERT`. Un `INSERT` può inserire più righe (`VALUES (…), (…)`). |
+| `statements` | array di stringhe | sì | Istruzioni PostgreSQL eseguite in ordine, **una per elemento**: prima i `CREATE TABLE`, poi gli `INSERT`. Un `INSERT` può inserire più righe (`VALUES (…), (…)`). |
 
 - Il database viene **ricreato** da questi statement ogni volta che si apre lo scenario;
-  dopo il caricamento è in sola lettura (`PRAGMA query_only`).
+  le interrogazioni girano in una transazione in sola lettura (`READ ONLY`) che viene sempre annullata.
 - Durante il caricamento le chiavi esterne non vengono imposte (l'ordine degli `INSERT`
   non conta). Le righe che violano le `REFERENCES` dichiarate producono però un avviso.
-- Le date vanno scritte come testo `'AAAA-MM-GG'` (si confrontano correttamente come stringhe).
-- Uno statement che SQLite non riesce a eseguire è un errore: il messaggio
+- Le date si dichiarano di tipo `DATE` e si scrivono `'AAAA-MM-GG'` (es. `'2025-01-31'`).
+- I nomi di tabelle e colonne vanno scritti **senza virgolette doppie**: PostgreSQL li tratta senza
+  distinguere maiuscole e minuscole (`Studente`, `STUDENTE` e `studente` sono la stessa tabella),
+  mentre `"Studente"` tra virgolette sarebbe un nome diverso da `studente`.
+- Le soluzioni possono usare tutto l'SQL standard di PostgreSQL: confronti quantificati
+  (`>= ALL (…)`, `= ANY (…)`, `SOME`), `EXISTS`, `INTERSECT`/`EXCEPT`, `FULL OUTER JOIN`,
+  `EXTRACT(YEAR FROM Data)`, `CASE`, `COALESCE`. Ogni colonna del `SELECT` di una query con
+  `GROUP BY` deve stare nel `GROUP BY` o in una funzione aggregata.
+- Scenari scritti per la versione precedente (SQLite) di solito funzionano; se uno statement usa
+  funzioni proprie di SQLite (`IFNULL`, `strftime`, …) va rigenerato.
+- Uno statement che PostgreSQL non riesce a eseguire è un errore: il messaggio
   indica quale (`database.statements[7]`) e mostra l'inizio dell'istruzione.
 
 ## `esercizi[]` (almeno uno)
@@ -243,7 +252,7 @@ nell'app è [`scenari-esempio/universita.json`](scenari-esempio/universita.json)
         "colonne": [ { "nome": "Tessera", "tipo": "INTEGER" }, { "nome": "Nome", "tipo": "TEXT" } ],
         "chiavePrimaria": ["Tessera"] },
       { "nome": "Prestito",
-        "colonne": [ { "nome": "Utente", "tipo": "INTEGER" }, { "nome": "Libro", "tipo": "TEXT" }, { "nome": "DataInizio", "tipo": "TEXT" }, { "nome": "DataFine", "tipo": "TEXT", "nullable": true } ],
+        "colonne": [ { "nome": "Utente", "tipo": "INTEGER" }, { "nome": "Libro", "tipo": "TEXT" }, { "nome": "DataInizio", "tipo": "DATE" }, { "nome": "DataFine", "tipo": "DATE", "nullable": true } ],
         "chiavePrimaria": ["Utente", "Libro", "DataInizio"],
         "chiaviEsterne": [
           { "colonne": ["Utente"], "tabella": "Utente", "riferimenti": ["Tessera"] },
@@ -256,7 +265,7 @@ nell'app è [`scenari-esempio/universita.json`](scenari-esempio/universita.json)
       "CREATE TABLE Autore (Id INTEGER PRIMARY KEY, Nome TEXT NOT NULL, Nazione TEXT);",
       "CREATE TABLE Libro (Isbn TEXT PRIMARY KEY, Titolo TEXT NOT NULL, Anno INTEGER NOT NULL, Autore INTEGER REFERENCES Autore(Id));",
       "CREATE TABLE Utente (Tessera INTEGER PRIMARY KEY, Nome TEXT NOT NULL);",
-      "CREATE TABLE Prestito (Utente INTEGER NOT NULL REFERENCES Utente(Tessera), Libro TEXT NOT NULL REFERENCES Libro(Isbn), DataInizio TEXT NOT NULL, DataFine TEXT, PRIMARY KEY (Utente, Libro, DataInizio));",
+      "CREATE TABLE Prestito (Utente INTEGER NOT NULL REFERENCES Utente(Tessera), Libro TEXT NOT NULL REFERENCES Libro(Isbn), DataInizio DATE NOT NULL, DataFine DATE, PRIMARY KEY (Utente, Libro, DataInizio));",
       "INSERT INTO Autore (Id, Nome, Nazione) VALUES (1, 'Italo Calvino', 'Italia'), (2, 'Umberto Eco', 'Italia'), (3, 'George Orwell', 'Regno Unito'), (4, 'Elena Ferrante', NULL), (5, 'Primo Levi', 'Italia');",
       "INSERT INTO Libro (Isbn, Titolo, Anno, Autore) VALUES ('L1', 'Il barone rampante', 1957, 1), ('L2', 'Le città invisibili', 1972, 1), ('L3', 'Il nome della rosa', 1980, 2), ('L4', '1984', 1949, 3), ('L5', 'L''amica geniale', 2011, 4), ('L6', 'Antologia di racconti', 1990, NULL);",
       "INSERT INTO Utente (Tessera, Nome) VALUES (100, 'Anna'), (101, 'Bruno'), (102, 'Carla'), (103, 'Dario');",
@@ -309,5 +318,5 @@ nell'app è [`scenari-esempio/universita.json`](scenari-esempio/universita.json)
 | FK verso colonna inesistente | `logico.tabelle[3].chiaviEsterne[0].riferimenti[0]: la colonna «Cod» non esiste nella tabella «Corso».` |
 | Soluzione come stringa singola | `esercizi[1].soluzioni: deve essere un array di stringhe (da 1 a 3 query)…` |
 | Soluzione non SELECT | `esercizi[4].soluzioni[0]: Istruzione DELETE non consentita…` |
-| SQL del database errato | `database.statements[9]: l'istruzione non viene eseguita da SQLite: no such table: Esami — «INSERT INTO Esami …»` |
+| SQL del database errato | `database.statements[9]: l'istruzione non viene eseguita da PostgreSQL: relation "esami" does not exist — «INSERT INTO Esami …»` |
 | JSON non valido | `JSON non valido alla riga 41, colonna 7: virgola di troppo prima di «]».` |

@@ -43,7 +43,7 @@ export class ClientSQL {
     };
     w.onerror = (ev) => {
       ev.preventDefault();
-      const err = new Error(`Errore del motore SQL: ${ev.message || 'impossibile avviare SQLite'}`);
+      const err = new Error(`Errore del motore SQL: ${ev.message || 'impossibile avviare il motore PostgreSQL'}`);
       for (const a of this.attese.values()) {
         if (a.timer) clearTimeout(a.timer);
         a.rifiuta(err);
